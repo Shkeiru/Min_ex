@@ -23,13 +23,13 @@ int main(int argc, char** argv) {
     // TEST PHYSIQUE VIA LE COEUR
     // ------------------------------------------
     // C'est propre, ça ne crashera pas le compilateur
-    initQuestEnv();
+    initQuESTEnv();
     reportQuESTEnv();
     Qureg qubits = createQureg(12);
     reportQureg(qubits);
-    initZerosState(qubits);
+    initZeroState(qubits);
     applyHadamard(qubits, 0);
-    controlledNot(qubits, 0, 1);
+    applyControlledPauliX(qubits, 0, 1);
     qreal prob = calcProbOfQubitOutcome(qubits, 0, 0);
     spdlog::info("Probabilité de |00>: {:.4f}", prob);
     destroyQureg(qubits);
@@ -71,13 +71,6 @@ int main(int argc, char** argv) {
         // Une petite fenêtre de contrôle
         ImGui::Begin("Controle Quantique");
         ImGui::Text("Etat: Operationnel");
-        ImGui::Text("Proba |00>: %.4f", prob);
-        
-        if (ImGui::Button("Relancer Simu")) {
-            sim.init(2);
-            sim.run_circuit_test();
-            prob = sim.get_probability_zero();
-        }
         ImGui::End();
 
         // Démo pour vérifier que ImPlot marche
