@@ -2,9 +2,7 @@
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
-// ON N'INCLUT PLUS QUEST.H ICI DIRECTEMENT
-// On passe par notre wrapper propre
-#include "simulation.hpp"
+#include <QuEST.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
