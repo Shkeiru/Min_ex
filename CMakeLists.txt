@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ==========================================
 # 1. OPTIONS & CONFIGURATION
 # ==========================================
+
+add_compile_definitions(QuEST_PRECISION=2) # 2 = Double, 1 = Float
+
 option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
 option(ENABLE_MULTITHREADING "Activer le multithreading (OpenMP)" ON)
 option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
