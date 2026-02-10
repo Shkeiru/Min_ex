@@ -1,0 +1,230 @@
+cmake_minimum_required(VERSION 3.15)
+
+# Nom du projet et version C++ (20 pour être tranquille)
+project(QuantumBeast VERSION 0.1 LANGUAGES CXX C)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ==========================================
+# 1. OPTIONS & CONFIGURATION
+# ==========================================
+option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
+option(ENABLE_MULTITHREADING "Activer le multithreading (OpenMP)" ON)
+option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
+option(ENABLE_DISTRIBUTION "Activer la distribution MPI (Désactivé si USE_MPI est OFF)" OFF)
+option(ENABLE_CUDA "Activer l'accélération GPU avec CUDA" OFF)
+option(ENABLE_HIP "Activer l'accélération GPU avec HIP" OFF)
+option(ENABLE_CUQUANTUM "Activer les fonctionnalités spécifiques à CuQuantum" OFF)
+
+# Dossier de sortie des binaires (plus propre)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Module FetchContent pour télécharger le monde entier
+include(FetchContent)
+
+# ==========================================
+# 2. DEPENDANCES (LE GROS MATOS)
+# ==========================================
+
+# --- A. QuEST (Le Moteur) ---
+message(STATUS "Fetching QuEST...")
+# Configuration AVANT le fetch (c'est comme ça que QuEST marche)
+if(USE_MPI)
+    set(DISTRIBUTED 1 CACHE BOOL "" FORCE)
+    set(MULTITHREADED 1 CACHE BOOL "" FORCE) # Hybride MPI+OpenMP
+else()
+    set(DISTRIBUTED 0 CACHE BOOL "" FORCE)
+    set(MULTITHREADED 1 CACHE BOOL "" FORCE) # OpenMP seulement
+endif()
+set(GPUACCELERATED 0 CACHE BOOL "" FORCE) # Pas de GPU pour l'instant
+set(PRECISION 2 CACHE BOOL "" FORCE)      # 2 = Double, 1 = Float
+
+FetchContent_Declare(
+    QuEST
+    GIT_REPOSITORY https://github.com/QuEST-Kit/QuEST.git
+    GIT_TAG        v4.2.0
+)
+FetchContent_MakeAvailable(QuEST)
+
+# --- B. CLI11 (L'interface Ligne de Commande) ---
+FetchContent_Declare(
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG        v2.6.1
+)
+FetchContent_MakeAvailable(CLI11)
+
+# --- C. Spdlog (Les Logs) ---
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.17.0
+)
+FetchContent_MakeAvailable(spdlog)
+
+# --- D. NLopt (L'Optimiseur) ---
+# Note: NLopt via CMake peut être capricieux sous Windows.
+# Si ça plante, commente et installe via vcpkg ou apt-get.
+message(STATUS "Fetching NLopt...")
+set(NLOPT_TESTS OFF CACHE BOOL "" FORCE)
+set(NLOPT_PYTHON OFF CACHE BOOL "Disable Python wrappers" FORCE)
+set(NLOPT_OCTAVE OFF CACHE BOOL "Disable Octave wrappers" FORCE)
+set(NLOPT_MATLAB OFF CACHE BOOL "Disable Matlab wrappers" FORCE)
+set(NLOPT_GUILE OFF CACHE BOOL "Disable Guile wrappers" FORCE)
+set(NLOPT_SWIG OFF CACHE BOOL "Disable SWIG" FORCE)
+set(NLOPT_TESTS OFF CACHE BOOL "Disable Tests" FORCE)
+FetchContent_Declare(
+    nlopt
+    GIT_REPOSITORY https://github.com/stevengj/nlopt.git
+    GIT_TAG        v2.10.1
+)
+FetchContent_MakeAvailable(nlopt)
+
+# --- E. Eigen & JSON (Header Only) ---
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen Docs" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Disable All Testing" FORCE)
+FetchContent_Declare(
+    Eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG        5.0.1
+)
+FetchContent_MakeAvailable(Eigen)
+
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.12.0
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# ==========================================
+# 3. LE COEUR (CORE LIBRARY)
+# ==========================================
+# C'est ta lib physique. Elle ne connait PAS le GUI.
+add_library(core STATIC
+    src/core/simulation.cpp
+    src/core/ansatz.cpp
+    src/core/hamiltonian.cpp
+)
+
+# On linke les maths et la physique
+target_link_libraries(core 
+    PUBLIC 
+    QuEST 
+    Eigen3::Eigen 
+    nlohmann_json::nlohmann_json
+    spdlog::spdlog
+    nlopt
+)
+target_include_directories(core PUBLIC src/core)
+
+# ==========================================
+# 4. CONFIGURATION DES MODULES
+# ==========================================
+# Si on construit le GUI, on désactive le CLI par défaut pour gagner du temps
+if(BUILD_GUI)
+    option(BUILD_CLI "Construire aussi le CLI en mode GUI" OFF)
+else()
+    option(BUILD_CLI "Construire le CLI (Mode Headless)" ON)
+endif()
+
+# ==========================================
+# 5. L'APPLICATION CLI (HPC)
+# ==========================================
+if(BUILD_CLI)
+    message(STATUS "Building CLI Application...")
+    add_executable(quantum_cli src/apps/cli/main_cli.cpp)
+    target_link_libraries(quantum_cli PRIVATE core CLI11::CLI11)
+
+    if(USE_MPI)
+        find_package(MPI REQUIRED)
+        target_link_libraries(quantum_cli PRIVATE MPI::MPI_CXX)
+        target_compile_definitions(quantum_cli PRIVATE USE_MPI)
+    endif()
+else()
+    message(STATUS "Skipping CLI build (Focus on GUI).")
+endif()
+
+# ==========================================
+# 6. L'APPLICATION GUI (LAPTOP)
+# ==========================================
+if(BUILD_GUI)
+    message(STATUS "Configuring GUI Mode...")
+
+    # --- Téléchargement GLFW ---
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG        3.4
+    )
+    FetchContent_MakeAvailable(glfw)
+
+    # --- Téléchargement ImGui ---
+    FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        docking # Branche docking pour le multi-viewport (le futur)
+    )
+    FetchContent_MakeAvailable(imgui)
+
+    # --- Téléchargement ImPlot ---
+    FetchContent_Declare(
+        implot
+        GIT_REPOSITORY https://github.com/epezent/implot.git
+        GIT_TAG        master
+    )
+    FetchContent_MakeAvailable(implot)
+
+    # --- GLAD (Manuel) ---
+    # On crée une lib statique pour GLAD
+    add_library(glad STATIC external/glad/src/glad.c)
+    target_include_directories(glad PUBLIC external/glad/include)
+
+    # --- Exécutable GUI ---
+    add_executable(quantum_gui src/apps/gui/main_gui.cpp)
+
+    # On ajoute les sources ImGui/ImPlot directement (Mode Brutal)
+    # C'est nécessaire car ils n'ont pas de CMakeLists natif propre
+    target_sources(quantum_gui PRIVATE
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        ${implot_SOURCE_DIR}/implot.cpp
+        ${implot_SOURCE_DIR}/implot_items.cpp
+        ${implot_SOURCE_DIR}/implot_demo.cpp
+    )
+
+    # Includes pour que le compilo trouve les headers ImGui
+    target_include_directories(quantum_gui PRIVATE 
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+        ${implot_SOURCE_DIR}
+    )
+
+    # Linkage final
+    target_link_libraries(quantum_gui PRIVATE 
+        core 
+        glad 
+        glfw 
+        ${OPENGL_LIBRARIES}
+    )
+    
+    # Copie les DLLs si sous Windows (Optionnel mais pratique)
+    if(WIN32)
+        add_custom_command(TARGET quantum_gui POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:glfw>
+            $<TARGET_FILE_DIR:quantum_gui>
+        )
+    endif()
+
+else()
+    message(STATUS "GUI Mode DISABLED. Building Headless only.")
+endif()
