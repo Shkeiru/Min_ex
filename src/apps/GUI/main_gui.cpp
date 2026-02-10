@@ -23,16 +23,18 @@ int main(int argc, char** argv) {
     // TEST PHYSIQUE VIA LE COEUR
     // ------------------------------------------
     // C'est propre, ça ne crashera pas le compilateur
-    Simulation sim;
+    initQuestEnv();
+    reportQuESTEnv();
+    Qureg qubits = createQureg(12);
+    reportQureg(qubits);
+    initZerosState(qubits);
+    applyHadamard(qubits, 0);
+    controlledNot(qubits, 0, 1);
+    qreal prob = calcProbOfQubitOutcome(qubits, 0, 0);
+    spdlog::info("Probabilité de |00>: {:.4f}", prob);
+    destroyQureg(qubits);
     
-    spdlog::info("Initialisation de la simulation...");
-    sim.init(2); // 2 Qubits
-    
-    spdlog::info("Lancement du circuit...");
-    sim.run_circuit_test();
-    
-    double prob = sim.get_probability_zero();
-    spdlog::info("Resultat : Proba |00> = {:.4f}", prob);
+
 
 
     // ------------------------------------------

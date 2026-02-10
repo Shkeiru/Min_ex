@@ -12,12 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_definitions(QuEST_PRECISION=2) # 2 = Double, 1 = Float
 
 option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
-option(ENABLE_MULTITHREADING "Activer le multithreading (OpenMP)" ON)
 option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
-option(ENABLE_DISTRIBUTION "Activer la distribution MPI (Désactivé si USE_MPI est OFF)" OFF)
-option(ENABLE_CUDA "Activer l'accélération GPU avec CUDA" OFF)
-option(ENABLE_HIP "Activer l'accélération GPU avec HIP" OFF)
-option(ENABLE_CUQUANTUM "Activer les fonctionnalités spécifiques à CuQuantum" OFF)
 
 # Dossier de sortie des binaires (plus propre)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
