@@ -111,12 +111,39 @@ int main(int argc, char** argv) {
         return -1;
     }
     
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+   glfwDefaultWindowHints();
 
+    // 2. On arrête de rêver : OpenGL 4.6 c'est NON sous WSL souvent.
+    // On demande la version 3.3. C'est le "Gold Standard". Tout tourne en 3.3.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    
+    // 3. On reste propre (Core Profile)
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Pour faire plaisir à MacOS si jamais
+
+    // 4. LE COUPABLE : L'Antialiasing (MSAA)
+    // GLXBadFBConfig arrive souvent parce que tu demandes implicitement du x4 ou x8
+    // et le driver virtuel ne sait pas le gérer. On le tue.
+    glfwWindowHint(GLFW_SAMPLES, 0); 
+
+    // 5. On explicite les bits de couleur pour être sûr qu'il ne cherche pas du 10-bits HDR de l'espace
+    glfwWindowHint(GLFW_RED_BITS, 8);
+    glfwWindowHint(GLFW_GREEN_BITS, 8);
+    glfwWindowHint(GLFW_BLUE_BITS, 8);
+    glfwWindowHint(GLFW_ALPHA_BITS, 8);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
+    glfwWindowHint(GLFW_STENCIL_BITS, 8);
+
+    // --- CRÉATION ---
+    
     GLFWwindow* window = glfwCreateWindow(1280, 720, "QuantumBeast - The Omnibus Test", nullptr, nullptr);
-    if (!window) { glfwTerminate(); return -1; }
+    
+    if (!window) { 
+        spdlog::critical("GLXBadFBConfig a encore frappe. La creation de fenetre a echoue.");
+        glfwTerminate(); 
+        return -1; 
+    }
     
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // V-Sync activée, on n'est pas des sauvages.
