@@ -18,6 +18,7 @@
 #include "implot.h"
 
 #include <iostream>
+#include <stdio.h>
 #include <vector>
 #include <cmath>
 
@@ -93,7 +94,18 @@ int main(int argc, char** argv) {
     // ------------------------------------------
     // 5. GRAPHIQUE (La foire au pixels)
     // ------------------------------------------
+
+    // Ajoute cette fonction quelque part
+    void error_callback(int error, const char* description) {
+        fprintf(stderr, "ERREUR GLFW (%d): %s\n", error, description);
+    }
+
+    spdlog::info("Initialisation de la fenetre graphique avec GLFW, GLAD, ImGui et ImPlot... Accrochez-vous.");
+    
+    glfwSetErrorCallback(error_callback);
     if (!glfwInit()) {
+
+        std::cerr << "Failed to initialize GLFW" << std::endl;
         spdlog::critical("GLFW a refuse de demarrer. Il a sans doute mieux a faire.");
         return -1;
     }
