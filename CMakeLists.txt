@@ -26,13 +26,28 @@ include(FetchContent)
 
 # --- A. QuEST (Le Moteur) ---
 message(STATUS "Fetching QuEST...")
+
+# Détection automatique de WSL pour éviter le crash NUMA
+set(IS_WSL OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    execute_process(COMMAND uname -r OUTPUT_VARIABLE KERNEL_RELEASE OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(KERNEL_RELEASE MATCHES ".*[Mm]icrosoft.*" OR KERNEL_RELEASE MATCHES ".*WSL.*")
+        set(IS_WSL ON)
+        message(STATUS ">> WSL DETECTE : Mode compatibilité activé (QuEST Multithreading OFF)")
+    endif()
+endif()
+
 # Configuration AVANT le fetch (c'est comme ça que QuEST marche)
 if(USE_MPI)
     set(DISTRIBUTED 1 CACHE BOOL "" FORCE)
     set(MULTITHREADED 1 CACHE BOOL "" FORCE) # Hybride MPI+OpenMP
 else()
     set(DISTRIBUTED 0 CACHE BOOL "" FORCE)
-    set(MULTITHREADED 1 CACHE BOOL "" FORCE) # OpenMP seulement
+    if(IS_WSL)
+        set(MULTITHREADED 0 CACHE BOOL "" FORCE) # 0 = Serial (Fix crash NUMA sur WSL)
+    else()
+        set(MULTITHREADED 1 CACHE BOOL "" FORCE) # OpenMP seulement (Vrai Linux)
+    endif()
 endif()
 set(GPUACCELERATED 0 CACHE BOOL "" FORCE) # Pas de GPU pour l'instant
 set(PRECISION 2 CACHE BOOL "" FORCE)      # 2 = Double, 1 = Float
