@@ -13,6 +13,7 @@ add_compile_definitions(QuEST_PRECISION=2) # 2 = Double, 1 = Float
 
 option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
 option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
+option(BUILD_EXAMPLES "Construire les exemples de base" OFF)
 
 # Dossier de sortie des binaires (plus propre)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -44,7 +45,8 @@ if(USE_MPI)
 else()
     set(DISTRIBUTED 0 CACHE BOOL "" FORCE)
     if(IS_WSL)
-        set(MULTITHREADED 0 CACHE BOOL "" FORCE) # 0 = Serial (Fix crash NUMA sur WSL)
+        set(MULTITHREADED 1 CACHE BOOL "" FORCE) # OpenMP mais pas NUMA (WSL ne gère pas bien le NUMA, ça peut causer des crashes)
+        set(NUMA_AWARE 0)
     else()
         set(MULTITHREADED 1 CACHE BOOL "" FORCE) # OpenMP seulement (Vrai Linux)
     endif()
