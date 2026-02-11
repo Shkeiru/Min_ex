@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
     ImGui::StyleColorsDark(); // Le thème clair est pour les psychopathes.
     
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 460");
+    ImGui_ImplOpenGL3_Init("#version 330");
 
     // Données pour notre graph custom
     std::vector<float> x_data(100);
