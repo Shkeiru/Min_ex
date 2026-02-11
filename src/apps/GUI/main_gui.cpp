@@ -31,6 +31,11 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) {
     return pow(x[0] - 3.0, 2) + 4.0;
 }
 
+void error_callback(int error, const char* description) {
+        fprintf(stderr, "ERREUR GLFW (%d): %s\n", error, description);
+    }
+
+
 int main(int argc, char** argv) {
     spdlog::set_pattern("[%H:%M:%S] %v");
     spdlog::info(">>> QUANTUM BEAST - GUI : MODE HYPER-TEST <<<");
@@ -95,11 +100,7 @@ int main(int argc, char** argv) {
     // 5. GRAPHIQUE (La foire au pixels)
     // ------------------------------------------
 
-    // Ajoute cette fonction quelque part
-    void error_callback(int error, const char* description) {
-        fprintf(stderr, "ERREUR GLFW (%d): %s\n", error, description);
-    }
-
+    
     spdlog::info("Initialisation de la fenetre graphique avec GLFW, GLAD, ImGui et ImPlot... Accrochez-vous.");
     
     glfwSetErrorCallback(error_callback);
