@@ -8,7 +8,7 @@
 // On inclut NLopt (C API pour être sûr que ça passe partout)
 #include <nlopt.h>
 
-#include <QuEST.h>
+#include <quest.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
