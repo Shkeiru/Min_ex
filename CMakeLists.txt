@@ -117,7 +117,8 @@ target_link_libraries(core
 target_include_directories(core PUBLIC 
     src/core
     # Fix for WSL: ensure QuEST headers are found
-    ${quest_SOURCE_DIR}/QuEST/include 
+    ${QuEST_SOURCE_DIR}/QuEST/include
+    ${quest_SOURCE_DIR}/QuEST/include
 )
 
 # ==========================================
@@ -211,6 +212,8 @@ if(BUILD_GUI)
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
         ${implot_SOURCE_DIR}
+        ${QuEST_SOURCE_DIR}/QuEST/include
+        ${quest_SOURCE_DIR}/QuEST/include
     )
 
     # Linkage final
