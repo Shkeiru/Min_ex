@@ -114,7 +114,11 @@ target_link_libraries(core
     spdlog::spdlog
     nlopt
 )
-target_include_directories(core PUBLIC src/core)
+target_include_directories(core PUBLIC 
+    src/core
+    # Fix for WSL: ensure QuEST headers are found
+    ${quest_SOURCE_DIR}/QuEST/include 
+)
 
 # ==========================================
 # 4. CONFIGURATION DES MODULES
@@ -131,8 +135,11 @@ endif()
 # ==========================================
 if(BUILD_CLI)
     message(STATUS "Building CLI Application...")
-    add_executable(quantum_cli src/apps/cli/main_cli.cpp)
-    target_link_libraries(quantum_cli PRIVATE core CLI11::CLI11)
+    add_executable(quantum_cli src/apps/CLI/main_cli.cpp)
+    target_link_libraries(quantum_cli PRIVATE 
+        core
+        QuEST 
+        CLI11::CLI11)
 
     if(USE_MPI)
         find_package(MPI REQUIRED)
@@ -182,7 +189,7 @@ if(BUILD_GUI)
     target_include_directories(glad PUBLIC external/glad/include)
 
     # --- Exécutable GUI ---
-    add_executable(quantum_gui src/apps/gui/main_gui.cpp)
+    add_executable(quantum_gui src/apps/GUI/main_gui.cpp)
 
     # On ajoute les sources ImGui/ImPlot directement (Mode Brutal)
     # C'est nécessaire car ils n'ont pas de CMakeLists natif propre
@@ -208,7 +215,8 @@ if(BUILD_GUI)
 
     # Linkage final
     target_link_libraries(quantum_gui PRIVATE 
-        core 
+        core
+        QuEST 
         glad 
         glfw 
         ${OPENGL_LIBRARIES}
