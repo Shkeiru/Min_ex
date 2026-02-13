@@ -1,4 +1,6 @@
 #define FMT_HEADER_ONLY 
+#define _USE_MATH_DEFINES
+
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
@@ -6,8 +8,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-// On inclut NLopt (C API pour être sûr que ça passe partout)
-#include <nlopt.h>
+// On inclut NLopt 
+#include <nlopt.hpp>
 
 // On inclut Quest pour faire de la physique quantique
 #include <quest.h>
@@ -33,8 +35,45 @@
 #include <vector>
 #include <complex>
 #include <cmath>
+#include <bitset>
 
 
+// -------------------------------------------------------
+// Structure pour passer les données à la fonction de coût
+// NLopt prend une fonction C-style, on encapsule tout dans
+// une struct pour éviter les variables globales
+// -------------------------------------------------------
+struct VQEData {
+    HEA& ansatz;
+    Qureg& qubits;
+    PauliStrSum& hamiltonian;
+    std::vector<std::string>& paulis;
+};
+
+// -------------------------------------------------------
+// Fonction de coût appelée par NLopt à chaque itération
+// Signature imposée par NLopt :
+//   - params : le vecteur de paramètres courant
+//   - grad   : le gradient (nullptr si on utilise un algo sans gradient)
+//   - data   : pointeur vers nos données custom (VQEData)
+// -------------------------------------------------------
+double cost_function(const std::vector<double>& params, std::vector<double>& grad, void* data) {
+    VQEData* vqe = static_cast<VQEData*>(data);
+
+    // Remet le registre quantique à |0000>
+    // OBLIGATOIRE à chaque éval : sans ça on accumule l'état précédent
+    initZeroState(vqe->qubits);
+    applyPauliX(vqe->qubits, 0);
+    applyPauliX(vqe->qubits, 1); //Etat hartree-fock |1100> pour commencer l'optimisation dans une zone plus prometteuse
+
+    // Reconstruit le circuit avec les nouveaux paramètres
+    vqe->ansatz.construct_circuit(vqe->qubits, params, vqe->paulis);
+
+    // Calcule <ψ|H|ψ>, c'est notre énergie variationnelle
+    qreal energy = calcExpecPauliStrSum(vqe->qubits, vqe->hamiltonian);
+
+    return (double)energy;
+}
 
 void error_callback(int error, const char* description) {
         fprintf(stderr, "ERREUR GLFW (%d): %s\n", error, description);
@@ -53,13 +92,15 @@ int main(int argc, char** argv) {
     spdlog::info(">>> Chargement du fichier hamiltonian.json (Esperons qu'il existe) <<<");
 
     std::vector<std::string> pauli_strings;
-    std::vector<std::complex<double>> coefficients;
+    std::vector<qcomp> coefficients;
 
     std::ifstream file("hamiltonian.json");
     nlohmann::json j = nlohmann::json::parse(file);
 
     for (auto& [key, term] : j.items()) {
         std::string pauli = term["pauli_string"].get<std::string>();
+        //reverse the string because we want qubit 0 on the right
+        //std::reverse(pauli.begin(), pauli.end());
         std::string coeff_str = term["coefficient"].get<std::string>();
 
         // Parse "(real+imagj)"
@@ -67,7 +108,7 @@ int main(int argc, char** argv) {
         std::sscanf(coeff_str.c_str(), "(%lf%lfj)", &real, &imag);
 
         pauli_strings.push_back(pauli);
-        coefficients.emplace_back(real, imag);
+        coefficients.push_back(getQcomp(real, imag));
     }
 
     for (size_t i = 0; i < pauli_strings.size(); ++i) {
@@ -78,10 +119,71 @@ int main(int argc, char** argv) {
     // Generation de l'Ansatz HEA (Hardware Efficient Ansatz)
     // ------------------------------------------
     
+    initQuESTEnv();
     //On va utiliser une classe qui sera dans ansatz.hpp pour générer un HEA à partir de l'Hamiltonien.
     //On lui passe le nombre de qubits (dérivé du H) et la profondeur
 
-    
+    //On va utiliser une classe qui sera dans ansatz.hpp pour générer un HEA à partir de l'Hamiltonien.
+    //On lui passe le nombre de qubits (dérivé du H) et la profondeur
+    int num_qubits = 4;
+    int depth = 3;
+    std::vector<std::string> paulis; //Dummy, pas besoin dans un HEA
+    HEA ansatz(num_qubits, depth);
+    // On génère le circuit à partir de l'ansatz et de l'Hamiltonien
+    int num_params = ansatz.get_num_params();
+    std::vector<double> params(num_params, 0.1); // Paramètres init
+    // On crée un registre quantique avec Quest
+    Qureg qubits = createQureg(num_qubits);
+    initZeroState(qubits);
+
+    std::vector<PauliStr> hamiltonian_terms(pauli_strings.size());
+    std::vector<int> count = {0, 1, 2, 3};
+    for (size_t i = 0; i < pauli_strings.size(); ++i) {
+        hamiltonian_terms[i] = getPauliStr(pauli_strings[i]);
+        spdlog::info("term {}: {}", i, pauli_strings[i]);
+        reportPauliStr(hamiltonian_terms[i]);
+    }
+    PauliStrSum hamiltonian = createPauliStrSum(hamiltonian_terms, coefficients);
+
+    // -------------------------------------------------------
+    // Initialisation de NLopt
+    // On choisit COBYLA : algo sans gradient, robuste pour
+    // les fonctions bruitées comme les circuits quantiques
+    // LN = Local, No-gradient. Alternatives : LN_NELDERMEAD, LN_SBPLX
+    // -------------------------------------------------------
+    nlopt::opt optimizer(nlopt::LN_NELDERMEAD, num_params);
+
+    // Borne les paramètres entre -2π et 2π
+    // Physiquement les angles de rotation sont périodiques,
+    // inutile de chercher au delà
+    optimizer.set_lower_bounds(std::vector<double>(num_params, -2 * M_PI));
+    optimizer.set_upper_bounds(std::vector<double>(num_params,  2 * M_PI));
+
+    // La fonction à minimiser + pointeur vers nos données
+    VQEData vqe_data{ansatz, qubits, hamiltonian, paulis};
+    optimizer.set_min_objective(cost_function, &vqe_data);
+
+    // Critères d'arrêt :
+    // - ftol_rel : arrêt si amélioration relative < 1e-8 entre deux itérations
+    // - maxeval  : arrêt au bout de 1000 appels à la fonction de coût quoi qu'il arrive
+    optimizer.set_ftol_rel(1e-8);
+    optimizer.set_maxeval(1000);
+
+    // -------------------------------------------------------
+    // Lancement de l'optimisation
+    // params est modifié in-place : il contiendra les paramètres optimaux
+    // minval reçoit l'énergie minimale trouvée
+    // -------------------------------------------------------
+    double minval;
+    try {
+        nlopt::result result = optimizer.optimize(params, minval);
+        spdlog::info("Optimisation terminée. Code retour : {}", (int)result);
+        spdlog::info("Energie minimale trouvée : {:.10f}", minval);
+        spdlog::info("Energie FCI attendue     : -1.8572750302");
+        spdlog::info("Erreur                   : {:.2e}", std::abs(minval - (-1.8572750302)));
+    } catch (const std::exception& e) {
+        spdlog::error("NLopt a planté : {}", e.what());
+    }
 
     // ------------------------------------------
     //  GRAPHIQUE (La foire au pixels)
