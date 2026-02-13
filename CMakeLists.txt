@@ -35,7 +35,6 @@ if(USE_MPI)
 else()
     set(DISTRIBUTED 0 CACHE BOOL "" FORCE)
     set(MULTITHREADED 1 CACHE BOOL "" FORCE)
-    set(NUMA_AWARE 0 CACHE BOOL "" FORCE) # Desactive NUMA partout (WSL, VM, Laptop)
 endif()
 set(GPUACCELERATED 0 CACHE BOOL "" FORCE) # Pas de GPU pour l'instant
 set(PRECISION 2 CACHE BOOL "" FORCE)      # 2 = Double, 1 = Float
@@ -105,7 +104,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 add_library(core STATIC
     src/core/simulation.cpp
     src/core/ansatz.cpp
-    src/core/hamiltonian.cpp
+    src/core/physics.cpp
 )
 
 # On linke les maths et la physique
@@ -118,6 +117,7 @@ target_link_libraries(core
     nlopt
 )
 target_include_directories(core PUBLIC 
+    src
     src/core
     # Fix for WSL: ensure QuEST headers are found
     ${QuEST_SOURCE_DIR}/quest/include
