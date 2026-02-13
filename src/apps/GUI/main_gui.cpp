@@ -36,6 +36,7 @@
 #include <complex>
 #include <cmath>
 #include <bitset>
+#include <random>
 
 
 // -------------------------------------------------------
@@ -73,6 +74,54 @@ double cost_function(const std::vector<double>& params, std::vector<double>& gra
     qreal energy = calcExpecPauliStrSum(vqe->qubits, vqe->hamiltonian);
 
     return (double)energy;
+}
+
+// Action d'un Pauli string sur un vecteur d'état
+// Remplit phi += coeff * P|psi>
+void apply_pauli_string(
+    const std::vector<std::complex<double>>& psi,
+    std::vector<std::complex<double>>& phi,
+    const std::string& pauli_str,
+    std::complex<double> coeff,
+    int num_qubits)
+{
+    int dim = 1 << num_qubits;
+    const std::complex<double> i_unit(0.0, 1.0);
+
+    for (int j = 0; j < dim; ++j) {
+        int j_prime = j;         // indice cible, on va le construire
+        std::complex<double> phase(1.0, 0.0);
+
+        for (int k = 0; k < num_qubits; ++k) {
+            // Convention QuEST : caractère le plus à droite = qubit 0
+            // pauli_str[num_qubits - 1 - k] est l'opérateur sur le qubit k
+            char op = pauli_str[num_qubits - 1 - k];
+            int bit_k = (j >> k) & 1; // valeur du bit k dans j
+
+            if (op == 'I') {
+                // Rien à faire
+            }
+            else if (op == 'Z') {
+                // Pas de flip, juste une phase
+                if (bit_k == 1) phase *= -1.0;
+            }
+            else if (op == 'X') {
+                // Flip du bit k
+                j_prime ^= (1 << k);
+            }
+            else if (op == 'Y') {
+                // Flip du bit k + phase
+                j_prime ^= (1 << k);
+                phase *= (bit_k == 0) ? i_unit : -i_unit;
+            }
+        }
+
+        phi[j] += coeff * phase * psi[j_prime];
+        std::cout << "j=" << std::bitset<4>(j) << " -> j'=" << std::bitset<4>(j_prime);
+        spdlog::info("j={:04b} -> j'={:04b} |psi[j']|={:.4f} phase=({:.2f}+{:.2f}j) contrib={:.4f}+{:.4f}j",
+            j, j_prime, std::abs(psi[j_prime]), phase.real(), phase.imag(),
+            (coeff * phase * psi[j_prime]).real(), (coeff * phase * psi[j_prime]).imag());
+    }
 }
 
 void error_callback(int error, const char* description) {
@@ -140,8 +189,6 @@ int main(int argc, char** argv) {
     std::vector<int> count = {0, 1, 2, 3};
     for (size_t i = 0; i < pauli_strings.size(); ++i) {
         hamiltonian_terms[i] = getPauliStr(pauli_strings[i]);
-        spdlog::info("term {}: {}", i, pauli_strings[i]);
-        reportPauliStr(hamiltonian_terms[i]);
     }
     PauliStrSum hamiltonian = createPauliStrSum(hamiltonian_terms, coefficients);
 
@@ -178,13 +225,70 @@ int main(int argc, char** argv) {
     try {
         nlopt::result result = optimizer.optimize(params, minval);
         spdlog::info("Optimisation terminée. Code retour : {}", (int)result);
-        spdlog::info("Energie minimale trouvée : {:.10f}", minval);
-        spdlog::info("Energie FCI attendue     : -1.8572750302");
-        spdlog::info("Erreur                   : {:.2e}", std::abs(minval - (-1.8572750302)));
+        
     } catch (const std::exception& e) {
         spdlog::error("NLopt a planté : {}", e.what());
     }
+    //------------------------------------------
+    // LE BRUIT STATISTIQUE DES SHOTS
+    // ------------------------------------------
+    int n_shots;
+    std::cout << "Entrez le nombre de shots pour simuler le bruit statistique (0 pour aucune simulation) : ";
+    std::cin >> n_shots;
+    if (n_shots > 0) {
+        int dim = 1 << num_qubits; // 16 pour 4 qubits
 
+        // Étape 1 : Extraire |ψ> dans un tableau C++ classique
+        std::vector<std::complex<double>> psi(dim);
+        for (int j = 0; j < dim; ++j) {
+            qcomp amp = getQuregAmp(qubits, j);
+            psi[j] = std::complex<double>(amp.real(), amp.imag());
+        }
+
+        // Étape 2 : Accumulateur Phi = H|ψ>
+        std::vector<std::complex<double>> phi(dim, {0.0, 0.0});
+
+        for (size_t i = 0; i < pauli_strings.size(); ++i) {
+            // Étape 3 : Pour chaque terme, calculer P_i|ψ> et accumuler c_i * P_i|ψ>
+            // → C'est ici qu'il faut implémenter l'action du Pauli string sur psi
+            // → Pour chaque bitstring j, calculer l'indice cible et la phase
+            // → phi[j] += coefficients[i] * phase * psi[j_cible]
+            apply_pauli_string(psi, phi, pauli_strings[i], coefficients[i], num_qubits);
+        }
+
+        // Étape 4 : <H²> = ||phi||²
+        double h2 = 0.0;
+        for (int j = 0; j < dim; ++j)
+            h2 += std::norm(phi[j]); // std::norm = |z|²
+
+        // <H>² tu l'as déjà : c'est minval²
+        // Variance = <H²> - <H>²
+        double variance = h2 - minval * minval;
+    
+
+        // ------------------------------------------
+        // Résultats finaux
+        // ------------------------------------------
+
+        // On tire le bruit selon une gaussienne N(E, σ²) où E = minval et σ = sqrt(variance / n_shots)
+        double noise_std = std::sqrt(variance / n_shots);
+        std::default_random_engine rng;
+        std::normal_distribution<double> dist(minval, noise_std);
+        
+
+        // On simule une mesure bruitée
+        double noisy_energy = dist(rng);
+        minval = noisy_energy; // On remplace minval par l'énergie bruitée pour l'affichage final
+        spdlog::info("Variance (propriete physique) : {:.10f}", variance);
+        spdlog::info("Ecart-type sur E ({} shots)   : {:.10f}", n_shots, noise_std);
+        spdlog::info("Energie bruitee               : {:.10f}", noisy_energy);
+
+    }
+    //Si  n_shots = 0, on considère que l'on a une évaluation parfaite sans bruit statistique
+
+    spdlog::info("Energie minimale trouvée : {:.10f}", minval);
+    spdlog::info("Energie FCI attendue     : -1.8572750302");
+    spdlog::info("Erreur                   : {:.2e}", std::abs(minval - (-1.8572750302)));
     // ------------------------------------------
     //  GRAPHIQUE (La foire au pixels)
     // ------------------------------------------
