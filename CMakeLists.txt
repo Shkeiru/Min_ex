@@ -193,7 +193,7 @@ if(BUILD_GUI)
     target_include_directories(glad PUBLIC external/glad/include)
 
     # --- Exécutable GUI ---
-    add_executable(quantum_gui src/apps/GUI/main_gui.cpp)
+    add_executable(quantum_gui src/apps/GUI/main_gui.cpp src/apps/GUI/gui.cpp)
 
     # On ajoute les sources ImGui/ImPlot directement (Mode Brutal)
     # C'est nécessaire car ils n'ont pas de CMakeLists natif propre
