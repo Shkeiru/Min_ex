@@ -28,6 +28,44 @@ include(FetchContent)
 # --- A. QuEST (Le Moteur) ---
 message(STATUS "Fetching QuEST...")
 
+# ==========================================
+# AUTO-DETECTION BACKEND ACCELERATION (GPU)
+# ==========================================
+include(CheckLanguage)
+# 1. Tentative NVIDIA (CUDA)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+    message(STATUS "🔥 Backend NVIDIA détecté ! Activation de CUDA pour QuEST.")
+    set(ENABLE_CUDA 1 CACHE BOOL "" FORCE)
+    set(ENABLE_CUQUANTUM 1 CACHE BOOL "" FORCE)
+    
+    # Récupération automatique de la target architecture (ex: sm_80)
+    # CMake >= 3.18
+    set(CMAKE_CUDA_ARCHITECTURES "native")
+    
+    # Les variables de QuEST (selon version)
+    set(COMPILER "nvcc" CACHE STRING "" FORCE)
+    set(GPU_COMPUTE_CAPABILITY "native" CACHE STRING "" FORCE)
+else()
+    # 2. Tentative AMD (ROCm / HIP)
+    check_language(HIP)
+    if(CMAKE_HIP_COMPILER)
+        enable_language(HIP)
+        message(STATUS "🔴 Backend AMD détecté ! Activation de HIP/ROCm.")
+        
+        # QuEST n'a pas de support natif formel CMake pour AMD sans forker,
+        # Mais un build HIP générique passe si GPUACCELERATED=1
+        set(GPUACCELERATED 1 CACHE BOOL "" FORCE)
+        # Configuration compiler spécifique HIP si nécessaire
+        set(COMPILER "hipcc" CACHE STRING "" FORCE)
+    else()
+        # 3. Fallback sur Numérique CPU / MPI
+        message(STATUS "🐢 Aucun GPU compatible détecté. Fallback CPU multicœurs.")
+        set(GPUACCELERATED 0 CACHE BOOL "" FORCE)
+    endif()
+endif()
+
 # Configuration AVANT le fetch (c'est comme ça que QuEST marche)
 if(USE_MPI)
     set(DISTRIBUTED 1 CACHE BOOL "" FORCE)
@@ -36,7 +74,6 @@ else()
     set(DISTRIBUTED 0 CACHE BOOL "" FORCE)
     set(MULTITHREADED 1 CACHE BOOL "" FORCE)
 endif()
-set(GPUACCELERATED 0 CACHE BOOL "" FORCE) # Pas de GPU pour l'instant
 set(PRECISION 2 CACHE BOOL "" FORCE)      # 2 = Double, 1 = Float
 
 FetchContent_Declare(
@@ -236,6 +273,22 @@ if(BUILD_GUI)
             $<TARGET_FILE_DIR:quantum_gui>
         )
     endif()
+
+    # Copie le script Python pour la generation d'Hamiltonien
+    add_custom_command(TARGET quantum_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_gui>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_hamiltonian.py
+        $<TARGET_FILE_DIR:quantum_gui>/python/generate_hamiltonian.py
+    )
+
+    # Copie le script Python pour la generation d'UCCSD
+    add_custom_command(TARGET quantum_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_gui>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_uccsd.py
+        $<TARGET_FILE_DIR:quantum_gui>/python/generate_uccsd.py
+    )
 
 else()
     message(STATUS "GUI Mode DISABLED. Building Headless only.")
