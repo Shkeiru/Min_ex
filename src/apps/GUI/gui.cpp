@@ -232,9 +232,17 @@ void GUI::DrawConfiguration() {
       // Reset Data
       iter_history.clear();
       energy_history.clear();
+      probs_history.clear();
+      params_history.clear();
       current_iter = 0;
       best_energy = 1e9;
       counts_values.clear();
+
+      // Pre-reserve history vectors to avoid repeated allocations
+      iter_history.reserve(max_iter);
+      energy_history.reserve(max_iter);
+      probs_history.reserve(max_iter);
+      params_history.reserve(max_iter);
 
       // Launch Thread
       is_running = true;
@@ -281,10 +289,13 @@ void GUI::DrawConfiguration() {
 
           double min_energy =
               sim.run(params, [this](int iter, double energy,
-                                     const std::vector<double> &probs) {
+                                     const std::vector<double> &probs,
+                                     const std::vector<double> &cb_params) {
                 std::lock_guard<std::mutex> lock(graph_mutex);
                 iter_history.push_back((double)iter);
                 energy_history.push_back(energy);
+                probs_history.push_back(probs);
+                params_history.push_back(cb_params);
                 current_energy = energy;
                 counts_values = probs;
                 current_iter = iter;
@@ -564,8 +575,14 @@ void GUI::SaveRun() {
   {
     std::lock_guard<std::mutex> lock(graph_mutex);
     for (size_t i = 0; i < iter_history.size(); ++i) {
-      history.push_back(
-          {{"iteration", iter_history[i]}, {"energy", energy_history[i]}});
+      nlohmann::json entry;
+      entry["iteration"] = iter_history[i];
+      entry["energy"] = energy_history[i];
+      if (i < probs_history.size())
+        entry["probabilities"] = probs_history[i];
+      if (i < params_history.size())
+        entry["parameters"] = params_history[i];
+      history.push_back(entry);
     }
   }
   j["history"] = history;

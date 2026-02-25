@@ -259,7 +259,7 @@ double Simulation::cost_function(const std::vector<double> &params,
       probs = sampled_probs;
     }
 
-    data->callback(data->current_iter, base_energy, probs);
+    data->callback(data->current_iter, base_energy, probs, params);
   }
 
   return base_energy;
@@ -280,9 +280,11 @@ double Simulation::cost_function(const std::vector<double> &params,
  * probabilities).
  * @return double The minimum energy found after optimization.
  */
-double Simulation::run(
-    std::vector<double> &optimal_params,
-    std::function<void(int, double, const std::vector<double> &)> callback) {
+double
+Simulation::run(std::vector<double> &optimal_params,
+                std::function<void(int, double, const std::vector<double> &,
+                                   const std::vector<double> &)>
+                    callback) {
 
   // Retrieve the Hamiltonian in QuEST format
   PauliStrSum ham = physics.get_quest_hamiltonian();

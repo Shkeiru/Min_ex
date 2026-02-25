@@ -41,8 +41,10 @@ struct VQEData {
 
   Physics &physics; ///< Reference to Physics object (needed for noise sim).
 
-  ///< Callback function for real-time updates.
-  std::function<void(int, double, const std::vector<double> &)> callback;
+  ///< Callback function for real-time updates (iter, energy, probs, params).
+  std::function<void(int, double, const std::vector<double> &,
+                     const std::vector<double> &)>
+      callback;
 
   int current_iter = 0; ///< Current iteration counter.
   int n_electrons = 0;  ///< Number of electrons in the system.
@@ -107,7 +109,8 @@ public:
    * @return double The minimum energy found.
    */
   double run(std::vector<double> &optimal_params,
-             std::function<void(int, double, const std::vector<double> &)>
+             std::function<void(int, double, const std::vector<double> &,
+                                const std::vector<double> &)>
                  callback = nullptr);
 
   //----------------------------------------------------------------------------

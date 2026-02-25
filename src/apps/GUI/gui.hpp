@@ -165,6 +165,10 @@ private:
   std::vector<double> iter_history; ///< History of iterations for plotting.
   std::vector<double>
       energy_history; ///< History of energy values for plotting.
+  std::vector<std::vector<double>>
+      probs_history; ///< Probabilities at each iteration.
+  std::vector<std::vector<double>>
+      params_history; ///< Parameters at each iteration.
 
   std::vector<const char *> counts_labels; ///< Labels for histogram bars.
   std::vector<double> counts_values; ///< Probability values for histogram.
