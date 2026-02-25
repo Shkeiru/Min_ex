@@ -24,7 +24,6 @@
 #include <sstream>
 #include <stdexcept>
 
-
 //------------------------------------------------------------------------------
 //     CONSTRUCTOR / DESTRUCTOR
 //------------------------------------------------------------------------------
@@ -118,15 +117,9 @@ double Simulation::evaluate_energy(const std::vector<double> &params,
       if (std::abs(coefficients[i]) < 1e-9)
         continue;
 
-      // Use the pre-parsed Pauli string
-      PauliStr pStr = data->parsed_paulis[i];
-
-      // Calculate exact expectation value <P> for the term
-      qcomp one = 1.0;
-      PauliStr terms_arr[] = {pStr};
-      PauliStrSum term_sum = createPauliStrSum(terms_arr, &one, 1);
-      double expectation = calcExpecPauliStrSum(local_qubits, term_sum);
-      destroyPauliStrSum(term_sum);
+      // Use the pre-calculated PauliStrSum
+      double expectation =
+          calcExpecPauliStrSum(local_qubits, data->single_term_sums[i]);
 
       // Simulate sampling from a Binomial distribution based on exact
       // expectation P(+1) = (1 + <P>) / 2
@@ -193,9 +186,13 @@ double Simulation::cost_function(const std::vector<double> &params,
     }
 
     // Parallelize the parameter shifts
-    try {
+    std::exception_ptr global_exception = nullptr;
 #pragma omp parallel for
-      for (int i = 0; i < num_params; ++i) {
+    for (int i = 0; i < num_params; ++i) {
+      if (global_exception)
+        continue;
+
+      try {
         std::vector<double> shifted_params = params;
 
         // Shift +π/2
@@ -208,11 +205,22 @@ double Simulation::cost_function(const std::vector<double> &params,
 
         // Parameter Shift Rule formula
         grad[i] = 0.5 * (e_plus - e_minus);
+      } catch (...) {
+#pragma omp critical
+        {
+          if (!global_exception) {
+            global_exception = std::current_exception();
+          }
+        }
       }
-    } catch (const std::exception &e) {
-      spdlog::error(
-          "[Simulation] Critical error in parallel gradient calculation: {}",
-          e.what());
+    }
+
+    if (global_exception) {
+      // Destroy Qureg vector before rethrowing
+      for (int i = 0; i < num_params; ++i) {
+        destroyQureg(local_qubits[i]);
+      }
+      std::rethrow_exception(global_exception);
     }
     // Destroy Qureg vector
     for (int i = 0; i < num_params; ++i) {
@@ -334,6 +342,16 @@ double Simulation::run(
   }
   data.parsed_paulis = parsed_paulis;
 
+  // Pre-calculate individual PauliStr sums for noisy simulations
+  std::vector<PauliStrSum> single_sums;
+  single_sums.reserve(parsed_paulis.size());
+  for (const auto &pStr : parsed_paulis) {
+    qcomp one = 1.0;
+    PauliStr terms_arr[] = {pStr};
+    single_sums.push_back(createPauliStrSum(terms_arr, &one, 1));
+  }
+  data.single_term_sums = single_sums;
+
   if (!ansatz.preserves_particle_number()) {
     std::string identity = std::string(physics.get_num_qubits(), 'I');
     int id_coeff = physics.get_num_qubits() / 2;
@@ -369,6 +387,12 @@ double Simulation::run(
 
   if (data.has_number_op) {
     destroyPauliStrSum(data.number_op);
+  }
+
+  // Properly destruct pre-allocated single-term Pauli sums to prevent memory
+  // leaks
+  for (auto &sum : data.single_term_sums) {
+    destroyPauliStrSum(sum);
   }
 
   return min_energy;

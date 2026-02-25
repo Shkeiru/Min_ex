@@ -53,9 +53,13 @@ struct VQEData {
   double *std_ptr = nullptr; ///< Pointer to store energy standard deviation.
 
   PauliStrSum number_op; ///< Penalty operator for particle number conservation.
-  bool has_number_op = false; ///< Flag indicating if penalty operator is initialized.
+  bool has_number_op =
+      false; ///< Flag indicating if penalty operator is initialized.
 
-  std::vector<PauliStr> parsed_paulis; ///< Pre-parsed QuEST Pauli strings for noisy sim.
+  std::vector<PauliStr>
+      parsed_paulis; ///< Pre-parsed QuEST Pauli strings for noisy sim.
+  std::vector<PauliStrSum>
+      single_term_sums; ///< Pre-allocated PauliStrSums for each term.
 };
 
 //------------------------------------------------------------------------------
