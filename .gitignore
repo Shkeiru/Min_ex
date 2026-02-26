@@ -1,3 +1,5 @@
 build/
 .vscode/
 XRW-VQE_Mockup/
+.clangd_config/
+.cache/
