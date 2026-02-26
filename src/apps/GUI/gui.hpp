@@ -6,6 +6,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "compat.h"
 #include <atomic>
 #include <functional>
 #include <iostream>

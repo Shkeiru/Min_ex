@@ -15,6 +15,7 @@
 //     INCLUDES
 //------------------------------------------------------------------------------
 
+#include "compat.h"
 #include <cmath>
 #include <complex>
 #include <iostream>

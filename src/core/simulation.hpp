@@ -16,6 +16,7 @@
 
 #include "ansatz.hpp"
 #include "physics.hpp"
+#include "compat.h"
 #include <complex>
 #include <functional>
 #include <nlopt.hpp>

@@ -19,6 +19,9 @@
 //     INCLUDES
 //------------------------------------------------------------------------------
 
+// compat
+#include "core/compat.h"
+
 // GLAD must be included before any other OpenGL header (and sometimes before
 // windows.h)
 #include <glad/glad.h>

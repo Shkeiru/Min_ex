@@ -1,5 +1,6 @@
 #pragma once
 
+#include "compat.h"
 #include <memory>
 #include <spdlog/sinks/ringbuffer_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>

@@ -12,6 +12,8 @@
 //     INCLUDES
 //------------------------------------------------------------------------------
 
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "physics.hpp"
 #include <cstdio>
 #include <iostream>
@@ -51,7 +53,7 @@ const std::vector<qcomp> &Physics::get_coefficients() const {
 qcomp Physics::parse_coefficient(const std::string &coeff_str) {
   double real = 0.0, imag = 0.0;
   if (coeff_str.find("(") != std::string::npos) {
-    sscanf_s(coeff_str.c_str(), "(%lf%lfj)", &real, &imag);
+    sscanf(coeff_str.c_str(), "(%lf%lfj)", &real, &imag);
   } else {
     try {
       real = std::stod(coeff_str);

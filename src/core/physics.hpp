@@ -15,6 +15,7 @@
 //     INCLUDES
 //------------------------------------------------------------------------------
 
+#include "compat.h"
 #include <algorithm>
 #include <complex>
 #include <fstream>
