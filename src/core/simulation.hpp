@@ -15,16 +15,31 @@
 //------------------------------------------------------------------------------
 
 #include "ansatz.hpp"
-#include "physics.hpp"
 #include "compat.h"
+#include "physics.hpp"
 #include <complex>
 #include <functional>
 #include <nlopt.hpp>
 #include <vector>
 
+
 //------------------------------------------------------------------------------
 //     STRUCTS
 //------------------------------------------------------------------------------
+
+/**
+ * @struct RDM1Term
+ * @brief Represents a single 1-Particle Reduced Density Matrix term
+ * $a^\dagger_p a_q$.
+ *
+ * It contains the mapped Pauli strings and their complex coefficients.
+ */
+struct RDM1Term {
+  int p;
+  int q;
+  std::vector<PauliStr> strings;
+  std::vector<qcomp> coeffs;
+};
 
 /**
  * @struct VQEData
@@ -63,6 +78,12 @@ struct VQEData {
       parsed_paulis; ///< Pre-parsed QuEST Pauli strings for noisy sim.
   std::vector<PauliStrSum>
       single_term_sums; ///< Pre-allocated PauliStrSums for each term.
+
+  // 1-RDM terms
+  std::vector<RDM1Term>
+      rdm1_operators; ///< 1-RDM grouped Pauli strings and coefficients.
+  std::vector<qcomp>
+      current_1rdm; ///< Latest evaluated 1-RDM expectation values.
 };
 
 //------------------------------------------------------------------------------
@@ -189,13 +210,16 @@ private:
                               std::vector<double> &grad, void *data);
 
   /**
-   * @brief Helper function to evaluate energy for a given set of parameters.
+   * @brief Helper function to evaluate functional (energy + 1-RDM) for a given
+   * set of parameters.
    *
    * @param params Current parameters.
    * @param data Pointer to VQEData struct.
    * @param local_qubits The quantum register to use for evaluation.
+   * @param rdm1_out Vector to store the output 1-RDM evaluations.
    * @return double Calculated energy value.
    */
-  static double evaluate_energy(const std::vector<double> &params,
-                                VQEData *data, Qureg local_qubits);
+  static double evaluate_functional(const std::vector<double> &params,
+                                    VQEData *data, Qureg local_qubits,
+                                    std::vector<qcomp> &rdm1_out);
 };

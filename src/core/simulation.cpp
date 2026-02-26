@@ -14,15 +14,43 @@
 
 #define _USE_MATH_DEFINES
 #include "simulation.hpp"
+#include "compat.h"
+#include <QuEST.h>
 #include <bitset>
 #include <cmath>
 #include <complex>
+#include <fstream> // Added by user instruction
+#include <functional>
 #include <iostream>
+#include <nlohmann/json.hpp> // Added by user instruction
 #include <omp.h>
 #include <random>
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
+
+//------------------------------------------------------------------------------
+//     XORSHIFT64 (Fast PRNG)
+//------------------------------------------------------------------------------
+
+struct fast_xorshift64 {
+  using result_type = uint64_t;
+  uint64_t state;
+
+  fast_xorshift64(uint64_t seed)
+      : state(seed == 0 ? 0x1337C0DECAFEF00DULL : seed) {}
+
+  static constexpr result_type min() { return 0; }
+  static constexpr result_type max() { return UINT64_MAX; }
+
+  inline result_type operator()() {
+    uint64_t x = state;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    return state = x;
+  }
+};
 
 //------------------------------------------------------------------------------
 //     CONSTRUCTOR / DESTRUCTOR
@@ -73,8 +101,12 @@ Simulation::~Simulation() { destroyQureg(qubits); }
  * @param data_ptr Pointer to VQEData structure containing simulation context.
  * @return double The estimated energy (cost) for the given parameters.
  */
-double Simulation::evaluate_energy(const std::vector<double> &params,
-                                   VQEData *data, Qureg local_qubits) {
+double Simulation::evaluate_functional(const std::vector<double> &params,
+                                       VQEData *data, Qureg local_qubits,
+                                       std::vector<qcomp> &rdm1_out) {
+
+  // Prepare rdm1_out vector for 1-RDM results
+  rdm1_out.assign(data->rdm1_operators.size(), 0.0);
 
   // Reset the quantum register to the zero state |00...0>
   initZeroState(local_qubits);
@@ -110,7 +142,7 @@ double Simulation::evaluate_energy(const std::vector<double> &params,
     // Hamiltonian terms.
 
     const auto &coefficients = data->physics.get_coefficients();
-    std::mt19937 gen(std::random_device{}());
+    thread_local fast_xorshift64 gen(std::random_device{}());
 
     for (size_t i = 0; i < data->parsed_paulis.size(); ++i) {
       // Skip negligible coefficients to improve performance
@@ -163,6 +195,37 @@ double Simulation::evaluate_energy(const std::vector<double> &params,
   qreal penalty = 3.0 * std::pow((number_exp - data->n_electrons), 2);
   energy += penalty;
 
+  //--------------------------------------------------------------------------
+  // 1-RDM Evaluation
+  //--------------------------------------------------------------------------
+  for (size_t idx = 0; idx < data->rdm1_operators.size(); ++idx) {
+    const auto &rdm_term = data->rdm1_operators[idx];
+    qcomp term_expectation = 0.0;
+
+    for (size_t s = 0; s < rdm_term.strings.size(); ++s) {
+      if (std::abs(rdm_term.coeffs[s].real()) < 1e-9 &&
+          std::abs(rdm_term.coeffs[s].imag()) < 1e-9) {
+        continue;
+      }
+
+      double p_expect_real;
+      if (data->n_shots > 0) {
+        // In noisy sim we should ideally sample the 1-RDM individually as well,
+        // we reuse exact for fast prototyping. Usually, 1-RDM is measured
+        // during the same shot batch unless mapping requires separate bases.
+      }
+
+      qcomp one = 1.0;
+      PauliStr p_arr[] = {rdm_term.strings[s]};
+      PauliStrSum temp_sum = createPauliStrSum(p_arr, &one, 1);
+      p_expect_real = calcExpecPauliStrSum(local_qubits, temp_sum);
+      destroyPauliStrSum(temp_sum);
+
+      term_expectation += rdm_term.coeffs[s] * p_expect_real;
+    }
+    rdm1_out[idx] = term_expectation;
+  }
+
   return energy;
 }
 
@@ -172,7 +235,8 @@ double Simulation::cost_function(const std::vector<double> &params,
   VQEData *data = static_cast<VQEData *>(data_ptr);
 
   // 1. Calculate the energy of the current point on the main register
-  double base_energy = evaluate_energy(params, data, data->qubits);
+  double base_energy =
+      evaluate_functional(params, data, data->qubits, data->current_1rdm);
 
   // 2. Calculate the local gradients using Parameter Shift Rule (PSR)
   // ONLY if requested by the optimizer
@@ -194,14 +258,18 @@ double Simulation::cost_function(const std::vector<double> &params,
 
       try {
         std::vector<double> shifted_params = params;
+        std::vector<qcomp> rdm1_plus;
+        std::vector<qcomp> rdm1_minus;
 
         // Shift +π/2
         shifted_params[i] = params[i] + M_PI / 2.0;
-        double e_plus = evaluate_energy(shifted_params, data, local_qubits[i]);
+        double e_plus = evaluate_functional(shifted_params, data,
+                                            local_qubits[i], rdm1_plus);
 
         // Shift -π/2
         shifted_params[i] = params[i] - M_PI / 2.0;
-        double e_minus = evaluate_energy(shifted_params, data, local_qubits[i]);
+        double e_minus = evaluate_functional(shifted_params, data,
+                                             local_qubits[i], rdm1_minus);
 
         // Parameter Shift Rule formula
         grad[i] = 0.5 * (e_plus - e_minus);
@@ -353,6 +421,78 @@ Simulation::run(std::vector<double> &optimal_params,
     single_sums.push_back(createPauliStrSum(terms_arr, &one, 1));
   }
   data.single_term_sums = single_sums;
+
+  //----------------------------------------------------------------------------
+  // 1-RDM Generation & Extraction
+  //----------------------------------------------------------------------------
+  try {
+    std::string cmd =
+        "python src/scripts/generate_1rdm.py --n_qubits " +
+        std::to_string(physics.get_num_qubits()) +
+        " --mapping jordan_wigner"; // assuming JW for now, could be dynamic
+
+    spdlog::info("[Simulation] Generating 1-RDM mapping: {}", cmd);
+
+    FILE *pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+      throw std::runtime_error("popen() failed!");
+    }
+
+    char buffer[256];
+    std::string json_filepath = "";
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+      json_filepath += buffer;
+    }
+    pclose(pipe);
+
+    // Remove trailing newlines explicitly
+    json_filepath.erase(
+        std::remove(json_filepath.begin(), json_filepath.end(), '\n'),
+        json_filepath.end());
+    json_filepath.erase(
+        std::remove(json_filepath.begin(), json_filepath.end(), '\r'),
+        json_filepath.end());
+
+    std::ifstream f(json_filepath);
+    if (!f.is_open()) {
+      throw std::runtime_error("Could not open 1-RDM JSON file: " +
+                               json_filepath);
+    }
+
+    nlohmann::json rdm_json;
+    f >> rdm_json;
+
+    // Group identically (p,q) items
+    std::map<std::pair<int, int>, RDM1Term> rdm_map;
+
+    for (const auto &item : rdm_json) {
+      int p = item["p"];
+      int q = item["q"];
+      double c_real = item["coeff_real"];
+      double c_imag = item["coeff_imag"];
+      std::string pauli_string = item["string"];
+
+      std::pair<int, int> pq_pair = {p, q};
+      if (rdm_map.find(pq_pair) == rdm_map.end()) {
+        rdm_map[pq_pair] = {p, q, {}, {}};
+      }
+
+      rdm_map[pq_pair].strings.push_back(getPauliStr(pauli_string));
+      rdm_map[pq_pair].coeffs.push_back({c_real, c_imag});
+    }
+
+    for (auto &pair : rdm_map) {
+      data.rdm1_operators.push_back(pair.second);
+    }
+
+    spdlog::info(
+        "[Simulation] Successfully parsed {} operator groups for 1-RDM",
+        data.rdm1_operators.size());
+
+  } catch (const std::exception &e) {
+    spdlog::error("[Simulation] Failed to generate/parse 1-RDM: {}", e.what());
+    // Depending on rules, you could rethrow or continue without 1-RDM logging.
+  }
 
   if (!ansatz.preserves_particle_number()) {
     std::string identity = std::string(physics.get_num_qubits(), 'I');

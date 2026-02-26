@@ -1,0 +1,394 @@
+[
+  {
+    "p": 0,
+    "q": 0,
+    "coeff_real": 0.5,
+    "coeff_imag": 0.0,
+    "string": "IIII"
+  },
+  {
+    "p": 0,
+    "q": 0,
+    "coeff_real": -0.5,
+    "coeff_imag": 0.0,
+    "string": "ZIII"
+  },
+  {
+    "p": 0,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "YXII"
+  },
+  {
+    "p": 0,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YYII"
+  },
+  {
+    "p": 0,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XXII"
+  },
+  {
+    "p": 0,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "XYII"
+  },
+  {
+    "p": 0,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "YZXI"
+  },
+  {
+    "p": 0,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YZYI"
+  },
+  {
+    "p": 0,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XZXI"
+  },
+  {
+    "p": 0,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "XZYI"
+  },
+  {
+    "p": 0,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "YZZX"
+  },
+  {
+    "p": 0,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YZZY"
+  },
+  {
+    "p": 0,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XZZX"
+  },
+  {
+    "p": 0,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "XZZY"
+  },
+  {
+    "p": 1,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "YXII"
+  },
+  {
+    "p": 1,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XXII"
+  },
+  {
+    "p": 1,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YYII"
+  },
+  {
+    "p": 1,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "XYII"
+  },
+  {
+    "p": 1,
+    "q": 1,
+    "coeff_real": 0.5,
+    "coeff_imag": 0.0,
+    "string": "IIII"
+  },
+  {
+    "p": 1,
+    "q": 1,
+    "coeff_real": -0.5,
+    "coeff_imag": 0.0,
+    "string": "IZII"
+  },
+  {
+    "p": 1,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IYXI"
+  },
+  {
+    "p": 1,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IYYI"
+  },
+  {
+    "p": 1,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IXXI"
+  },
+  {
+    "p": 1,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IXYI"
+  },
+  {
+    "p": 1,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IYZX"
+  },
+  {
+    "p": 1,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IYZY"
+  },
+  {
+    "p": 1,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IXZX"
+  },
+  {
+    "p": 1,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IXZY"
+  },
+  {
+    "p": 2,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "YZXI"
+  },
+  {
+    "p": 2,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XZXI"
+  },
+  {
+    "p": 2,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YZYI"
+  },
+  {
+    "p": 2,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "XZYI"
+  },
+  {
+    "p": 2,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IYXI"
+  },
+  {
+    "p": 2,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IXXI"
+  },
+  {
+    "p": 2,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IYYI"
+  },
+  {
+    "p": 2,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IXYI"
+  },
+  {
+    "p": 2,
+    "q": 2,
+    "coeff_real": 0.5,
+    "coeff_imag": 0.0,
+    "string": "IIII"
+  },
+  {
+    "p": 2,
+    "q": 2,
+    "coeff_real": -0.5,
+    "coeff_imag": 0.0,
+    "string": "IIZI"
+  },
+  {
+    "p": 2,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IIYX"
+  },
+  {
+    "p": 2,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IIYY"
+  },
+  {
+    "p": 2,
+    "q": 3,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IIXX"
+  },
+  {
+    "p": 2,
+    "q": 3,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IIXY"
+  },
+  {
+    "p": 3,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "YZZX"
+  },
+  {
+    "p": 3,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "XZZX"
+  },
+  {
+    "p": 3,
+    "q": 0,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "YZZY"
+  },
+  {
+    "p": 3,
+    "q": 0,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "XZZY"
+  },
+  {
+    "p": 3,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IYZX"
+  },
+  {
+    "p": 3,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IXZX"
+  },
+  {
+    "p": 3,
+    "q": 1,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IYZY"
+  },
+  {
+    "p": 3,
+    "q": 1,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IXZY"
+  },
+  {
+    "p": 3,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": 0.25,
+    "string": "IIYX"
+  },
+  {
+    "p": 3,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IIXX"
+  },
+  {
+    "p": 3,
+    "q": 2,
+    "coeff_real": 0.25,
+    "coeff_imag": 0.0,
+    "string": "IIYY"
+  },
+  {
+    "p": 3,
+    "q": 2,
+    "coeff_real": 0.0,
+    "coeff_imag": -0.25,
+    "string": "IIXY"
+  },
+  {
+    "p": 3,
+    "q": 3,
+    "coeff_real": 0.5,
+    "coeff_imag": 0.0,
+    "string": "IIII"
+  },
+  {
+    "p": 3,
+    "q": 3,
+    "coeff_real": -0.5,
+    "coeff_imag": 0.0,
+    "string": "IIIZ"
+  }
+]
