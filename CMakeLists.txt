@@ -38,7 +38,7 @@ if(CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     message(STATUS "🔥 Backend NVIDIA détecté ! Activation de CUDA pour QuEST.")
     set(ENABLE_CUDA 1 CACHE BOOL "" FORCE)
-    set(ENABLE_CUQUANTUM 1 CACHE BOOL "" FORCE)
+
     
     # Récupération automatique de la target architecture (ex: sm_80)
     # CMake >= 3.18
