@@ -226,6 +226,27 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
     rdm1_out[idx] = term_expectation;
   }
 
+  if (!data->current_1rdm.empty() && data->integrals.size() > 0) {
+    // Map the 1-RDM evaluated vector to an Eigen Vector
+    Eigen::Map<Eigen::VectorXcd> rdm1_map(
+        reinterpret_cast<std::complex<double> *>(data->current_1rdm.data()),
+        data->current_1rdm.size());
+
+    // Perform the matrix-vector multiplication to get the theoretical factors
+    Eigen::VectorXcd calc_factors = data->integrals * rdm1_map;
+
+    //Computation of eta
+    double eta = 
+    ((calc_factors.cwiseAbs() * data->exp_factors.cwiseAbs()).cwiseQuotient(data->uncertainties).sum())/
+    (calc_factors.cwiseAbs2().cwiseQuotient(data->uncertainties).sum());
+
+    // TODO: Here you will define how these calculated factors impact the total
+    double chi_squared = (eta * calc_factors.cwiseAbs() - data->exp_factors.cwiseAbs()).cwiseAbs2()
+                                                                                               .cwiseQuotient(data->uncertainties.cwiseAbs2())
+                                                                                               .sum();
+    energy += chi_squared;
+  }
+
   return energy;
 }
 
@@ -236,23 +257,6 @@ double Simulation::cost_function(const std::vector<double> &params,
 
   // 1. Calculate the energy of the current point on the main register
   double base_energy = evaluate_functional(params, data, data->qubits, data->current_1rdm);
-
-  // --- Diffraction Calculation on the main register (exact simulation path
-  // usually) ---
-  if (!data->current_1rdm.empty() && data->integrals.size() > 0) {
-    // Map the 1-RDM evaluated vector to an Eigen Vector
-    Eigen::Map<Eigen::VectorXcd> rdm1_map(
-        reinterpret_cast<std::complex<double> *>(data->current_1rdm.data()),
-        data->current_1rdm.size());
-
-    // Perform the matrix-vector multiplication to get the theoretical factors
-    Eigen::VectorXcd calc_factors = data->integrals * rdm1_map;
-
-    // TODO: Here you will define how these calculated factors impact the total
-    // cost function For example: double diffraction_penalty = (calc_factors -
-    // data->exp_factors).cwiseAbs2().cwiseQuotient(data->uncertainties).sum();
-    // base_energy += lambda_weight * diffraction_penalty;
-  }
 
   // 2. Calculate the local gradients using Parameter Shift Rule (PSR)
   // ONLY if requested by the optimizer
