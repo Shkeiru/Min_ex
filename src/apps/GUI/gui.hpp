@@ -4,9 +4,10 @@
 //     INCLUDES
 //------------------------------------------------------------------------------
 
+#include "ImGuiFileDialog.h"
+#include "compat.h"
 #include "imgui.h"
 #include "implot.h"
-#include "compat.h"
 #include <atomic>
 #include <functional>
 #include <iostream>
@@ -17,6 +18,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+
 
 //------------------------------------------------------------------------------
 //     CLASS DECLARATION
@@ -119,6 +121,14 @@ private:
   int spin = 0;               ///< Molecular spin (2S).
   int mapping_idx = 0;        ///< Selected mapping index.
   std::vector<const char *> mappings = {"Jordan-Wigner", "Bravyi-Kitaev"};
+
+  //----------------------------------------------------------------------------
+  //     DATA MEMBERS - DIFFRACTION
+  //----------------------------------------------------------------------------
+
+  std::string filepath_integrals = ""; ///< Path to integrals file
+  std::string filepath_factors = "";   ///< Path to experimental factors file
+  bool is_diffraction_ready = false;   ///< Flag if both files are selected
 
   //----------------------------------------------------------------------------
   //     DATA MEMBERS - NLOPT

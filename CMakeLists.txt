@@ -224,6 +224,17 @@ if(BUILD_GUI)
     )
     FetchContent_MakeAvailable(implot)
 
+    # --- Téléchargement ImGuiFileDialog ---
+    FetchContent_Declare(
+        ImGuiFileDialog
+        GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+        GIT_TAG        v0.6.8
+    )
+    FetchContent_GetProperties(ImGuiFileDialog)
+    if(NOT imguifiledialog_POPULATED)
+        FetchContent_Populate(ImGuiFileDialog)
+    endif()
+
     # --- GLAD (Manuel) ---
     # On crée une lib statique pour GLAD
     add_library(glad STATIC external/glad/src/glad.c)
@@ -245,6 +256,7 @@ if(BUILD_GUI)
         ${implot_SOURCE_DIR}/implot.cpp
         ${implot_SOURCE_DIR}/implot_items.cpp
         ${implot_SOURCE_DIR}/implot_demo.cpp
+        ${imguifiledialog_SOURCE_DIR}/ImGuiFileDialog.cpp
     )
 
     # Includes pour que le compilo trouve les headers ImGui
@@ -252,6 +264,7 @@ if(BUILD_GUI)
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
         ${implot_SOURCE_DIR}
+        ${imguifiledialog_SOURCE_DIR}
         ${QuEST_SOURCE_DIR}/quest/include
         ${quest_SOURCE_DIR}/quest/include
     )
@@ -288,6 +301,14 @@ if(BUILD_GUI)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/src/scripts/generate_uccsd.py
         $<TARGET_FILE_DIR:quantum_gui>/python/generate_uccsd.py
+    )
+
+    # Copie le script Python pour la generation de la 1RDM
+    add_custom_command(TARGET quantum_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_gui>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_1rdm.py
+        $<TARGET_FILE_DIR:quantum_gui>/python/generate_1rdm.py
     )
 
 else()

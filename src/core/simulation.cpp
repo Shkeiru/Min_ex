@@ -235,23 +235,36 @@ double Simulation::cost_function(const std::vector<double> &params,
   VQEData *data = static_cast<VQEData *>(data_ptr);
 
   // 1. Calculate the energy of the current point on the main register
-  double base_energy =
-      evaluate_functional(params, data, data->qubits, data->current_1rdm);
+  double base_energy = evaluate_functional(params, data, data->qubits, data->current_1rdm);
+
+  // --- Diffraction Calculation on the main register (exact simulation path
+  // usually) ---
+  if (!data->current_1rdm.empty() && data->integrals.size() > 0) {
+    // Map the 1-RDM evaluated vector to an Eigen Vector
+    Eigen::Map<Eigen::VectorXcd> rdm1_map(
+        reinterpret_cast<std::complex<double> *>(data->current_1rdm.data()),
+        data->current_1rdm.size());
+
+    // Perform the matrix-vector multiplication to get the theoretical factors
+    Eigen::VectorXcd calc_factors = data->integrals * rdm1_map;
+
+    // TODO: Here you will define how these calculated factors impact the total
+    // cost function For example: double diffraction_penalty = (calc_factors -
+    // data->exp_factors).cwiseAbs2().cwiseQuotient(data->uncertainties).sum();
+    // base_energy += lambda_weight * diffraction_penalty;
+  }
 
   // 2. Calculate the local gradients using Parameter Shift Rule (PSR)
   // ONLY if requested by the optimizer
   if (!grad.empty()) {
     int num_params = params.size();
 
-    // Initialize Qureg vector
-    std::vector<Qureg> local_qubits(num_params);
-    for (int i = 0; i < num_params; ++i) {
-      local_qubits[i] = createQureg(data->num_qubits);
-    }
+    // Initialize Qureg
+    Qureg local_qubits(num_params);
 
-    // Parallelize the parameter shifts
+    // Evaluate parameter shifts sequentially to allow QuEST/Eigen to fully
+    // utilize threads
     std::exception_ptr global_exception = nullptr;
-#pragma omp parallel for
     for (int i = 0; i < num_params; ++i) {
       if (global_exception)
         continue;
@@ -264,36 +277,32 @@ double Simulation::cost_function(const std::vector<double> &params,
         // Shift +π/2
         shifted_params[i] = params[i] + M_PI / 2.0;
         double e_plus = evaluate_functional(shifted_params, data,
-                                            local_qubits[i], rdm1_plus);
+                                            local_qubits, rdm1_plus);
 
         // Shift -π/2
         shifted_params[i] = params[i] - M_PI / 2.0;
         double e_minus = evaluate_functional(shifted_params, data,
-                                             local_qubits[i], rdm1_minus);
+                                             local_qubits, rdm1_minus);
 
         // Parameter Shift Rule formula
         grad[i] = 0.5 * (e_plus - e_minus);
+
+        // Reset the Qureg
+        initZeroState(local_qubits);
       } catch (...) {
-#pragma omp critical
-        {
-          if (!global_exception) {
-            global_exception = std::current_exception();
-          }
+        if (!global_exception) {
+          global_exception = std::current_exception();
         }
       }
     }
 
     if (global_exception) {
-      // Destroy Qureg vector before rethrowing
-      for (int i = 0; i < num_params; ++i) {
-        destroyQureg(local_qubits[i]);
-      }
+      // Destroy Qureg before rethrowing
+      destroyQureg(local_qubits);
       std::rethrow_exception(global_exception);
     }
-    // Destroy Qureg vector
-    for (int i = 0; i < num_params; ++i) {
-      destroyQureg(local_qubits[i]);
-    }
+    // Destroy Qureg
+    destroyQureg(local_qubits);
   }
 
   // Execute callback if provided (e.g., for GUI updates)
@@ -433,9 +442,9 @@ Simulation::run(std::vector<double> &optimal_params,
 
     spdlog::info("[Simulation] Generating 1-RDM mapping: {}", cmd);
 
-    FILE *pipe = popen(cmd.c_str(), "r");
+    FILE *pipe = _popen(cmd.c_str(), "r");
     if (!pipe) {
-      throw std::runtime_error("popen() failed!");
+      throw std::runtime_error("_popen() failed!");
     }
 
     char buffer[256];
@@ -443,7 +452,7 @@ Simulation::run(std::vector<double> &optimal_params,
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
       json_filepath += buffer;
     }
-    pclose(pipe);
+    _pclose(pipe);
 
     // Remove trailing newlines explicitly
     json_filepath.erase(
@@ -514,6 +523,21 @@ Simulation::run(std::vector<double> &optimal_params,
   }
 
   optimizer.set_min_objective(cost_function, &data);
+
+  // --- Allocating Dummy Diffraction Data ---
+  int M = 100000;
+  int N_rdm = data.rdm1_operators.size();
+  spdlog::info("[Simulation] Allocating Eigen dummy matrices for diffraction "
+               "data (M={}, N_rdm={})",
+               M, N_rdm);
+
+  if (N_rdm > 0) {
+    data.integrals =
+        Eigen::MatrixXcd::Constant(M, N_rdm, std::complex<double>(1.0, 1.0));
+    data.exp_factors =
+        Eigen::VectorXcd::Constant(M, std::complex<double>(1.0, 1.0));
+    data.uncertainties = Eigen::VectorXd::Constant(M, 1.0);
+  }
 
   double min_energy = 0.0;
 

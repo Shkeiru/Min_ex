@@ -218,6 +218,59 @@ void GUI::DrawConfiguration() {
   }
 
   //--------------------------------------------------------------------------
+  // Diffraction Data (File Selection)
+  //--------------------------------------------------------------------------
+  ImGui::SeparatorText("1.5 Donnees de Diffraction");
+
+  // Selection Integrales
+  if (ImGui::Button("Choisir Fichier Integrales")) {
+    IGFD::FileDialogConfig config;
+    config.path = ".";
+    ImGuiFileDialog::Instance()->OpenDialog(
+        "ChooseIntegrals", "Choisir Fichier Integrales", ".*", config);
+  }
+  ImGui::SameLine();
+  ImGui::TextWrapped(
+      "%s", filepath_integrals.empty() ? "Aucun" : filepath_integrals.c_str());
+
+  // Selection Facteurs experimentaux
+  if (ImGui::Button("Choisir Fichier Facteurs")) {
+    IGFD::FileDialogConfig config;
+    config.path = ".";
+    ImGuiFileDialog::Instance()->OpenDialog(
+        "ChooseFactors", "Choisir Fichier Facteurs Expérimentaux", ".*",
+        config);
+  }
+  ImGui::SameLine();
+  ImGui::TextWrapped("%s", filepath_factors.empty() ? "Aucun"
+                                                    : filepath_factors.c_str());
+
+  // Maj du statut global de diffraction
+  is_diffraction_ready =
+      (!filepath_integrals.empty() && !filepath_factors.empty());
+
+  if (is_diffraction_ready) {
+    ImGui::TextColored(ImVec4(0, 1, 0, 1), "Donnees de diffraction pretes !");
+  }
+
+  // Draw dialogs
+  if (ImGuiFileDialog::Instance()->Display("ChooseIntegrals")) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      filepath_integrals = ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  if (ImGuiFileDialog::Instance()->Display("ChooseFactors")) {
+    if (ImGuiFileDialog::Instance()->IsOk()) {
+      filepath_factors = ImGuiFileDialog::Instance()->GetFilePathName();
+    }
+    ImGuiFileDialog::Instance()->Close();
+  }
+
+  ImGui::Spacing();
+
+  //--------------------------------------------------------------------------
   // Run Simulation
   //--------------------------------------------------------------------------
   if (ImGui::Button("RUN VQE", ImVec2(-FLT_MIN, 0))) {
@@ -255,9 +308,13 @@ void GUI::DrawConfiguration() {
       int current_ansatz_idx = ansatz_idx;
       int current_depth = hea_depth;
       std::string current_map = mappings[mapping_idx];
+      std::string integrals_path =
+          is_diffraction_ready ? filepath_integrals : "";
+      std::string factors_path = is_diffraction_ready ? filepath_factors : "";
 
       calculation_thread = std::thread([this, selected_algo, current_ansatz_idx,
-                                        current_depth, current_map]() {
+                                        current_depth, current_map,
+                                        integrals_path, factors_path]() {
         try {
           // 1. Load Physics
           Physics physics("hamiltonian.json");

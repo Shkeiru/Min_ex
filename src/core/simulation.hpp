@@ -17,11 +17,11 @@
 #include "ansatz.hpp"
 #include "compat.h"
 #include "physics.hpp"
+#include <Eigen/Dense>
 #include <complex>
 #include <functional>
 #include <nlopt.hpp>
 #include <vector>
-
 
 //------------------------------------------------------------------------------
 //     STRUCTS
@@ -84,6 +84,12 @@ struct VQEData {
       rdm1_operators; ///< 1-RDM grouped Pauli strings and coefficients.
   std::vector<qcomp>
       current_1rdm; ///< Latest evaluated 1-RDM expectation values.
+
+  // Diffraction data (Eigen)
+  Eigen::MatrixXcd
+      integrals; ///< Integral matrix for theoretically computed factors.
+  Eigen::VectorXcd exp_factors;  ///< Experimental factors for comparison.
+  Eigen::VectorXd uncertainties; ///< Experimental uncertainties.
 };
 
 //------------------------------------------------------------------------------
