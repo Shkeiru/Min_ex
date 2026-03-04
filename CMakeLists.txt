@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_definitions(QuEST_PRECISION=2) # 2 = Double, 1 = Float
 
-option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
+option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" OFF)
 option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
 option(BUILD_EXAMPLES "Construire les exemples de base" OFF)
 
@@ -187,6 +187,30 @@ if(BUILD_CLI)
         target_link_libraries(quantum_cli PRIVATE MPI::MPI_CXX)
         target_compile_definitions(quantum_cli PRIVATE USE_MPI)
     endif()
+
+    # Copie le script Python pour la generation d'Hamiltonien
+    add_custom_command(TARGET quantum_cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_cli>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_hamiltonian.py
+        $<TARGET_FILE_DIR:quantum_cli>/python/generate_hamiltonian.py
+    )
+
+    # Copie le script Python pour la generation d'UCCSD
+    add_custom_command(TARGET quantum_cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_cli>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_uccsd.py
+        $<TARGET_FILE_DIR:quantum_cli>/python/generate_uccsd.py
+    )
+
+    # Copie le script Python pour la generation de la 1RDM
+    add_custom_command(TARGET quantum_cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_cli>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_1rdm.py
+        $<TARGET_FILE_DIR:quantum_cli>/python/generate_1rdm.py
+    )
 else()
     message(STATUS "Skipping CLI build (Focus on GUI).")
 endif()
