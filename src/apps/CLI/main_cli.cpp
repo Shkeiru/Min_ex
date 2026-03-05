@@ -12,7 +12,6 @@
 #include "core/physics.hpp"
 #include "core/simulation.hpp"
 
-
 #include <CLI/CLI.hpp>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -27,7 +26,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-
 
 // Global flag for Ctrl-C termination
 std::atomic<bool> keep_running{true};
@@ -287,6 +285,15 @@ int main(int argc, char **argv) {
 
       // Re-fetch final probabilities using the sim method for output
       counts_values = sim.get_probabilities(params);
+
+      // Log final optimized parameters
+      std::string params_str = "[ ";
+      for (size_t i = 0; i < params.size(); ++i) {
+        params_str +=
+            std::to_string(params[i]) + (i < params.size() - 1 ? ", " : " ]");
+      }
+      spdlog::info("Parametres optimaux finaux: {}", params_str);
+
     } catch (const std::exception &e) {
       spdlog::error("Simulation erreur: {}", e.what());
       status_message = "Erreur fatale VQE.";
