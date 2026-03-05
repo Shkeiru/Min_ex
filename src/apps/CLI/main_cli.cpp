@@ -31,7 +31,7 @@
 std::atomic<bool> keep_running{true};
 
 void signal_handler(int signum) {
-  spdlog::warn("Interruption (Ctrl-C) detectee! Arret en cours...");
+  spdlog::warn("Interruption (Ctrl-C) detected, stopping now...");
   keep_running.store(false);
 }
 
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
   // Initialize QuEST
   initQuESTEnv();
 
-  CLI::App app{"VQE Simulator CLI"};
+  CLI::App app{"XRW-VQE Simulator CLI"};
 
   // Molecule & Hamiltonian options
   std::string opt_atom;
@@ -116,7 +116,7 @@ int main(int argc, char **argv) {
   app.add_option("--tolerance", opt_tolerance, "Relative tolerance");
   app.add_option("--shots", opt_shots,
                  "Number of shots for noise (0 = statevector)");
-  app.add_option("--ansatz", opt_ansatz, "Type d'ansatz (HEA ou UCCSD)");
+  app.add_option("--ansatz", opt_ansatz, "Ansatz type (HEA or UCCSD)");
   app.add_option("--hea-depth", opt_hea_depth, "Depth if Ansatz = HEA");
 
   // Diffraction Data options
@@ -135,12 +135,12 @@ int main(int argc, char **argv) {
   CLI11_PARSE(app, argc, argv);
 
   try {
-    spdlog::info("Demarrage du VQE Simulator CLI...");
+    spdlog::info("XRW-VQE Simulator CLI starting...");
 
     std::string formatted_mapping = format_mapping(opt_mapping);
 
     // 1. Generate Hamiltonian via Python
-    spdlog::info(">>> Generation Hamiltonien...");
+    spdlog::info(">>> Generating Hamiltonian...");
     std::string command;
 #ifdef _WIN32
     command = "wsl ";
@@ -157,8 +157,7 @@ int main(int argc, char **argv) {
 
     FILE *pipe = _popen(command.c_str(), "r");
     if (!pipe) {
-      spdlog::critical(
-          "Impossible d'ouvrir le pipe pour la generation d'Hamiltonien.");
+      spdlog::critical("Failed to open pipe for Hamiltonian generation.");
       finalizeQuESTEnv();
       return EXIT_FAILURE;
     }
@@ -176,8 +175,7 @@ int main(int argc, char **argv) {
 
     int ret = _pclose(pipe);
     if (ret != 0) {
-      spdlog::critical("Erreur lors de l'execution du script Python. Code: {}",
-                       ret);
+      spdlog::critical("Failed to execute Python script. Code: {}", ret);
       finalizeQuESTEnv();
       return EXIT_FAILURE;
     }
@@ -191,7 +189,7 @@ int main(int argc, char **argv) {
       nlohmann::json hj;
       f >> hj;
       if (hj.contains("error")) {
-        spdlog::critical("Erreur script Python: {}",
+        spdlog::critical("Python script error: {}",
                          hj["error"].get<std::string>());
         finalizeQuESTEnv();
         return EXIT_FAILURE;
@@ -205,12 +203,12 @@ int main(int argc, char **argv) {
         hilbert_space = (long long)std::pow(2, num_qubits);
       }
     } else {
-      spdlog::critical("Fichier hamiltonian.json introuvable.");
+      spdlog::critical("Hamiltonian file hamiltonian.json not found.");
       finalizeQuESTEnv();
       return EXIT_FAILURE;
     }
 
-    spdlog::info("Hamiltonien charge. Qubits: {}, Termes: {}", num_qubits,
+    spdlog::info("Hamiltonian loaded. Qubits: {}, Terms: {}", num_qubits,
                  num_paulis);
 
     // 2. Load Physics
@@ -225,7 +223,7 @@ int main(int argc, char **argv) {
           std::make_unique<UCCSD>(physics.get_num_qubits(),
                                   physics.get_n_electrons(), formatted_mapping);
     } else {
-      spdlog::critical("Ansatz inconnu: {}", opt_ansatz);
+      spdlog::critical("Ansatz type unknown: {}", opt_ansatz);
       finalizeQuESTEnv();
       return EXIT_FAILURE;
     }
@@ -241,11 +239,15 @@ int main(int argc, char **argv) {
     // Required history arrays
     std::vector<double> iter_history;
     std::vector<double> energy_history;
+    std::vector<double> base_energy_history;
+    std::vector<double> chi_squared_history;
     std::vector<std::vector<double>> probs_history;
     std::vector<std::vector<double>> params_history;
 
     iter_history.reserve(opt_max_iter);
     energy_history.reserve(opt_max_iter);
+    base_energy_history.reserve(opt_max_iter);
+    chi_squared_history.reserve(opt_max_iter);
     probs_history.reserve(opt_max_iter);
     params_history.reserve(opt_max_iter);
 
@@ -253,32 +255,35 @@ int main(int argc, char **argv) {
     std::vector<double> counts_values;
 
     // Callback
-    auto callback = [&](int iter, double energy,
-                        const std::vector<double> &probs,
+    auto callback = [&](int iter, double total_energy, double quantum_energy,
+                        double chi_squared, const std::vector<double> &probs,
                         const std::vector<double> &cb_params) {
       if (!keep_running.load()) {
         throw std::runtime_error("Interrupted by user");
       }
       iter_history.push_back((double)iter);
-      energy_history.push_back(energy);
+      energy_history.push_back(total_energy);
+      base_energy_history.push_back(quantum_energy);
+      chi_squared_history.push_back(chi_squared);
       probs_history.push_back(probs);
       params_history.push_back(cb_params);
 
       counts_values = probs;
-      if (energy < best_energy)
-        best_energy = energy;
+      if (total_energy < best_energy)
+        best_energy = total_energy;
 
       if (iter % 10 == 0 ||
           iter == 1) { // Log every 10 iterations to not flood terminal
-        spdlog::info("Iter: {}, Energy: {:.6f}", iter, energy);
+        spdlog::info("Iter: {}, Energy: {:.6f}, Base E: {:.6f}, Chi2: {:.6f}",
+                     iter, total_energy, quantum_energy, chi_squared);
       }
     };
 
-    spdlog::info(">>> Debut VQE... (Simulation)");
+    spdlog::info(">>> Starting XRW-VQE... (Simulation)");
     std::vector<double> params(ansatz->get_num_params(), 0.1);
 
     double noisy_energy = 0.0;
-    std::string status_message = "VQE Termine.";
+    std::string status_message = "XRW-VQE terminated.";
 
     try {
       noisy_energy = sim.run(params, callback, opt_factors, opt_integrals);
@@ -292,11 +297,11 @@ int main(int argc, char **argv) {
         params_str +=
             std::to_string(params[i]) + (i < params.size() - 1 ? ", " : " ]");
       }
-      spdlog::info("Parametres optimaux finaux: {}", params_str);
+      spdlog::info("Final optimized parameters: {}", params_str);
 
     } catch (const std::exception &e) {
-      spdlog::error("Simulation erreur: {}", e.what());
-      status_message = "Erreur fatale VQE.";
+      spdlog::error("Simulation error: {}", e.what());
+      status_message = "XRW-VQE terminated with error.";
     }
 
     // 5. Generate JSON strictly identical to GUI::SaveRun()
@@ -317,15 +322,24 @@ int main(int argc, char **argv) {
                           {"hea_depth", opt_hea_depth},
                           {"ansatz", opt_ansatz}};
 
-    j["results"] = {{"final_energy", noisy_energy},
-                    {"best_exact_energy", best_energy},
-                    {"status", status_message}};
+    j["results"] = {
+        {"final_energy", noisy_energy},
+        {"final_base_energy",
+         base_energy_history.empty() ? 0.0 : base_energy_history.back()},
+        {"final_chi_squared",
+         chi_squared_history.empty() ? 0.0 : chi_squared_history.back()},
+        {"best_exact_energy", best_energy},
+        {"status", status_message}};
 
     std::vector<nlohmann::json> history_arr;
     for (size_t i = 0; i < iter_history.size(); ++i) {
       nlohmann::json entry;
       entry["iteration"] = iter_history[i];
       entry["energy"] = energy_history[i];
+      if (i < base_energy_history.size())
+        entry["base_energy"] = base_energy_history[i];
+      if (i < chi_squared_history.size())
+        entry["chi_squared"] = chi_squared_history[i];
       if (i < probs_history.size())
         entry["probabilities"] = probs_history[i];
       if (i < params_history.size())
@@ -349,7 +363,7 @@ int main(int argc, char **argv) {
     }
     j["state"]["labels"] = labels;
 
-    j["system"] = {{"simulator", "VQE Simulator C++ v1.0"},
+    j["system"] = {{"simulator", "XRW-VQE Simulator C++ v1.0"},
                    {"num_qubits", num_qubits},
                    {"num_paulis", num_paulis}};
 
@@ -364,12 +378,12 @@ int main(int argc, char **argv) {
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
 
-    spdlog::info("Run sauvegarde dans: {}", filename);
+    spdlog::info("Run saved to: {}", filename);
 
     finalizeQuESTEnv();
 
   } catch (const std::exception &e) {
-    spdlog::critical("Erreur Critique: {}", e.what());
+    spdlog::critical("Critical error: {}", e.what());
     finalizeQuESTEnv();
     return EXIT_FAILURE;
   }

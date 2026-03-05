@@ -57,8 +57,9 @@ struct VQEData {
 
   Physics &physics; ///< Reference to Physics object (needed for noise sim).
 
-  ///< Callback function for real-time updates (iter, energy, probs, params).
-  std::function<void(int, double, const std::vector<double> &,
+  ///< Callback function for real-time updates (iter, total_energy,
+  ///< quantum_energy, chi_squared, probs, params).
+  std::function<void(int, double, double, double, const std::vector<double> &,
                      const std::vector<double> &)>
       callback;
 
@@ -140,7 +141,8 @@ public:
    * @return double The minimum energy found.
    */
   double run(std::vector<double> &optimal_params,
-             std::function<void(int, double, const std::vector<double> &,
+             std::function<void(int, double, double, double,
+                                const std::vector<double> &,
                                 const std::vector<double> &)>
                  callback = nullptr,
              const std::string &fcalc_path = "",
@@ -235,9 +237,15 @@ private:
    * @param data Pointer to VQEData struct.
    * @param local_qubits The quantum register to use for evaluation.
    * @param rdm1_out Vector to store the output 1-RDM evaluations.
-   * @return double Calculated energy value.
+   * @param out_quantum_energy Optional pointer to store extracted quantum
+   * energy.
+   * @param out_chi_squared Optional pointer to store extracted chi-squared
+   * value.
+   * @return double Calculated total energy value (including penalty).
    */
   static double evaluate_functional(const std::vector<double> &params,
                                     VQEData *data, Qureg local_qubits,
-                                    std::vector<qcomp> &rdm1_out);
+                                    std::vector<qcomp> &rdm1_out,
+                                    double *out_quantum_energy = nullptr,
+                                    double *out_chi_squared = nullptr);
 };

@@ -15,7 +15,6 @@
 #define _USE_MATH_DEFINES
 #include "simulation.hpp"
 #include "compat.h"
-#include <quest.h>
 #include <bitset>
 #include <cmath>
 #include <complex>
@@ -24,10 +23,12 @@
 #include <iostream>
 #include <nlohmann/json.hpp> // Added by user instruction
 #include <omp.h>
+#include <quest.h>
 #include <random>
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <stdexcept>
+
 
 //------------------------------------------------------------------------------
 //     XORSHIFT64 (Fast PRNG)
@@ -103,7 +104,9 @@ Simulation::~Simulation() { destroyQureg(qubits); }
  */
 double Simulation::evaluate_functional(const std::vector<double> &params,
                                        VQEData *data, Qureg local_qubits,
-                                       std::vector<qcomp> &rdm1_out) {
+                                       std::vector<qcomp> &rdm1_out,
+                                       double *out_quantum_energy,
+                                       double *out_chi_squared) {
 
   // Prepare rdm1_out vector for 1-RDM results
   rdm1_out.assign(data->rdm1_operators.size(), 0.0);
@@ -226,6 +229,11 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
     rdm1_out[idx] = term_expectation;
   }
 
+  if (out_quantum_energy)
+    *out_quantum_energy = energy;
+  if (out_chi_squared)
+    *out_chi_squared = 0.0;
+
   if (!data->current_1rdm.empty() && data->integrals.size() > 0) {
     // Map the 1-RDM evaluated vector to an Eigen Vector
     Eigen::Map<Eigen::VectorXcd> rdm1_map(
@@ -249,6 +257,9 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
             .cwiseAbs2()
             .cwiseQuotient(data->uncertainties.cwiseAbs2())
             .sum();
+
+    if (out_chi_squared)
+      *out_chi_squared = chi_squared;
     energy += data->lambda * chi_squared;
   }
 
@@ -260,9 +271,13 @@ double Simulation::cost_function(const std::vector<double> &params,
 
   VQEData *data = static_cast<VQEData *>(data_ptr);
 
+  double current_quantum_energy = 0.0;
+  double current_chi_squared = 0.0;
+
   // 1. Calculate the energy of the current point on the main register
   double base_energy =
-      evaluate_functional(params, data, data->qubits, data->current_1rdm);
+      evaluate_functional(params, data, data->qubits, data->current_1rdm,
+                          &current_quantum_energy, &current_chi_squared);
 
   // 2. Calculate the local gradients using Parameter Shift Rule (PSR)
   // ONLY if requested by the optimizer
@@ -346,7 +361,8 @@ double Simulation::cost_function(const std::vector<double> &params,
       probs = sampled_probs;
     }
 
-    data->callback(data->current_iter, base_energy, probs, params);
+    data->callback(data->current_iter, base_energy, current_quantum_energy,
+                   current_chi_squared, probs, params);
   }
 
   return base_energy;
@@ -367,12 +383,12 @@ double Simulation::cost_function(const std::vector<double> &params,
  * probabilities).
  * @return double The minimum energy found after optimization.
  */
-double
-Simulation::run(std::vector<double> &optimal_params,
-                std::function<void(int, double, const std::vector<double> &,
-                                   const std::vector<double> &)>
-                    callback,
-                const std::string &fcalc_path, const std::string &ft_int_path) {
+double Simulation::run(
+    std::vector<double> &optimal_params,
+    std::function<void(int, double, double, double, const std::vector<double> &,
+                       const std::vector<double> &)>
+        callback,
+    const std::string &fcalc_path, const std::string &ft_int_path) {
 
   // Retrieve the Hamiltonian in QuEST format
   PauliStrSum ham = physics.get_quest_hamiltonian();

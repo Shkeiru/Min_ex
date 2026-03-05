@@ -289,15 +289,22 @@ void GUI::DrawConfiguration() {
       // Reset Data
       iter_history.clear();
       energy_history.clear();
+      base_energy_history.clear();
+      chi_squared_history.clear();
       probs_history.clear();
       params_history.clear();
       current_iter = 0;
+      current_energy = 0.0;
+      current_base_energy = 0.0;
+      current_chi_squared = 0.0;
       best_energy = 1e9;
       counts_values.clear();
 
       // Pre-reserve history vectors to avoid repeated allocations
       iter_history.reserve(max_iter);
       energy_history.reserve(max_iter);
+      base_energy_history.reserve(max_iter);
+      chi_squared_history.reserve(max_iter);
       probs_history.reserve(max_iter);
       params_history.reserve(max_iter);
 
@@ -317,83 +324,89 @@ void GUI::DrawConfiguration() {
       std::string factors_path = is_diffraction_ready ? filepath_factors : "";
       double current_lambda = lambda_diffraction;
 
-      calculation_thread = std::thread([this, selected_algo, current_ansatz_idx,
-                                        current_depth, current_map,
-                                        integrals_path, factors_path,
-                                        current_lambda]() {
-        try {
-          // 1. Load Physics
-          Physics physics("hamiltonian.json");
+      calculation_thread = std::thread(
+          [this, selected_algo, current_ansatz_idx, current_depth, current_map,
+           integrals_path, factors_path, current_lambda]() {
+            try {
+              // 1. Load Physics
+              Physics physics("hamiltonian.json");
 
-          // 2. Setup Ansatz
-          std::unique_ptr<Ansatz> ansatz;
-          if (current_ansatz_idx == 0) {
-            ansatz =
-                std::make_unique<HEA>(physics.get_num_qubits(), current_depth);
-          } else {
-            // Format mapping string
-            std::string map_str = current_map;
-            std::transform(map_str.begin(), map_str.end(), map_str.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            std::replace(map_str.begin(), map_str.end(), '-', '_');
+              // 2. Setup Ansatz
+              std::unique_ptr<Ansatz> ansatz;
+              if (current_ansatz_idx == 0) {
+                ansatz = std::make_unique<HEA>(physics.get_num_qubits(),
+                                               current_depth);
+              } else {
+                // Format mapping string
+                std::string map_str = current_map;
+                std::transform(map_str.begin(), map_str.end(), map_str.begin(),
+                               [](unsigned char c) { return std::tolower(c); });
+                std::replace(map_str.begin(), map_str.end(), '-', '_');
 
-            ansatz = std::make_unique<UCCSD>(
-                physics.get_num_qubits(), physics.get_n_electrons(), map_str);
-          }
+                ansatz =
+                    std::make_unique<UCCSD>(physics.get_num_qubits(),
+                                            physics.get_n_electrons(), map_str);
+              }
 
-          // 3. Create Simulation
-          Simulation sim(physics, *ansatz, selected_algo);
-          sim.set_max_evals(max_iter);
-          sim.set_tolerance(tolerance);
-          sim.set_shots(shots);
-          sim.set_lambda(current_lambda);
+              // 3. Create Simulation
+              Simulation sim(physics, *ansatz, selected_algo);
+              sim.set_max_evals(max_iter);
+              sim.set_tolerance(tolerance);
+              sim.set_shots(shots);
+              sim.set_lambda(current_lambda);
 
-          // 4. Run Optimization
-          std::vector<double> params(ansatz->get_num_params(), 0.1);
+              // 4. Run Optimization
+              std::vector<double> params(ansatz->get_num_params(), 0.1);
 
-          double min_energy = sim.run(
-              params,
-              [this](int iter, double energy, const std::vector<double> &probs,
-                     const std::vector<double> &cb_params) {
+              double min_energy = sim.run(
+                  params,
+                  [this](int iter, double total_energy, double quantum_energy,
+                         double chi_squared, const std::vector<double> &probs,
+                         const std::vector<double> &cb_params) {
+                    std::lock_guard<std::mutex> lock(graph_mutex);
+                    iter_history.push_back((double)iter);
+                    energy_history.push_back(total_energy);
+                    base_energy_history.push_back(quantum_energy);
+                    chi_squared_history.push_back(chi_squared);
+                    probs_history.push_back(probs);
+                    params_history.push_back(cb_params);
+                    current_energy = total_energy;
+                    current_base_energy = quantum_energy;
+                    current_chi_squared = chi_squared;
+                    counts_values = probs;
+                    current_iter = iter;
+                    if (total_energy < best_energy)
+                      best_energy = total_energy;
+                  },
+                  factors_path, integrals_path);
+
+              // 5. Update Status with Noise Results (if any)
+              try {
                 std::lock_guard<std::mutex> lock(graph_mutex);
-                iter_history.push_back((double)iter);
-                energy_history.push_back(energy);
-                probs_history.push_back(probs);
-                params_history.push_back(cb_params);
-                current_energy = energy;
-                counts_values = probs;
-                current_iter = iter;
-                if (energy < best_energy)
-                  best_energy = energy;
-              },
-              factors_path, integrals_path);
+                is_running = false;
+                status_message = "VQE Termine.";
 
-          // 5. Update Status with Noise Results (if any)
-          try {
-            std::lock_guard<std::mutex> lock(graph_mutex);
-            is_running = false;
-            status_message = "VQE Termine.";
+                // If shots > 0, min_energy IS the noisy energy from the last
+                // step
+                final_results.noisy_energy = min_energy;
+                final_results.variance = sim.get_last_variance();
+                final_results.noise_std = sim.get_last_std();
 
-            // If shots > 0, min_energy IS the noisy energy from the last step
-            final_results.noisy_energy = min_energy;
-            final_results.variance = sim.get_last_variance();
-            final_results.noise_std = sim.get_last_std();
-
-            // Get probabilities for final params
-            final_results.sampled_probs = sim.get_probabilities(params);
-          } catch (const std::exception &e) {
-            std::lock_guard<std::mutex> lock(graph_mutex);
-            is_running = false;
-            status_message = "Erreur VQE.";
-            spdlog::error("Erreur VQE Probabilites: {}", e.what());
-          }
-        } catch (const std::exception &e) {
-          std::lock_guard<std::mutex> lock(graph_mutex);
-          is_running = false;
-          status_message = "Erreur fatale VQE.";
-          spdlog::error("Erreur VQE Globale: {}", e.what());
-        }
-      });
+                // Get probabilities for final params
+                final_results.sampled_probs = sim.get_probabilities(params);
+              } catch (const std::exception &e) {
+                std::lock_guard<std::mutex> lock(graph_mutex);
+                is_running = false;
+                status_message = "Erreur VQE.";
+                spdlog::error("Erreur VQE Probabilites: {}", e.what());
+              }
+            } catch (const std::exception &e) {
+              std::lock_guard<std::mutex> lock(graph_mutex);
+              is_running = false;
+              status_message = "Erreur fatale VQE.";
+              spdlog::error("Erreur VQE Globale: {}", e.what());
+            }
+          });
     }
   }
 
@@ -447,7 +460,9 @@ void GUI::DrawInfoAndResults() {
   ImGui::SeparatorText("Resultats Simulation");
   if (!iter_history.empty() || status_message == "VQE Running...") {
     ImGui::Text("Iteration: %d", current_iter);
-    ImGui::Text("Energie Actuelle: %.6f Ha", current_energy);
+    ImGui::Text("Energie Totale: %.6f Ha", current_energy);
+    ImGui::Text("Energie de Base: %.6f Ha", current_base_energy);
+    ImGui::Text("Chi2: %.6e", current_chi_squared);
     ImGui::Text("Meilleure Energie: %.6f Ha", best_energy);
   } else {
     ImGui::TextDisabled("En attente de run...");
@@ -632,6 +647,10 @@ void GUI::SaveRun() {
       {"final_energy", final_results.noisy_energy}, // Or best_energy? Noisy
                                                     // energy is the final
       // result of shot sim.
+      {"final_base_energy",
+       base_energy_history.empty() ? 0.0 : base_energy_history.back()},
+      {"final_chi_squared",
+       chi_squared_history.empty() ? 0.0 : chi_squared_history.back()},
       {"best_exact_energy", best_energy},
       {"status", status_message}};
 
@@ -643,6 +662,10 @@ void GUI::SaveRun() {
       nlohmann::json entry;
       entry["iteration"] = iter_history[i];
       entry["energy"] = energy_history[i];
+      if (i < base_energy_history.size())
+        entry["base_energy"] = base_energy_history[i];
+      if (i < chi_squared_history.size())
+        entry["chi_squared"] = chi_squared_history[i];
       if (i < probs_history.size())
         entry["probabilities"] = probs_history[i];
       if (i < params_history.size())

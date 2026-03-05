@@ -166,6 +166,8 @@ private:
 
   int current_iter = 0;        ///< Current iteration number.
   double current_energy = 0.0; ///< Current energy value.
+  double current_base_energy = 0.0;
+  double current_chi_squared = 0.0;
   double best_energy = 1e9; ///< Best recorded energy (initialized to infinity).
   std::string status_message = "Prêt."; ///< Status message displayed in GUI.
 
@@ -176,6 +178,8 @@ private:
   std::vector<double> iter_history; ///< History of iterations for plotting.
   std::vector<double>
       energy_history; ///< History of energy values for plotting.
+  std::vector<double> base_energy_history;
+  std::vector<double> chi_squared_history;
   std::vector<std::vector<double>>
       probs_history; ///< Probabilities at each iteration.
   std::vector<std::vector<double>>
