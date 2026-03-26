@@ -16,10 +16,12 @@
 
 #include "ansatz.hpp"
 #include "compat.h"
+#include "opt.hpp"
 #include "physics.hpp"
 #include <Eigen/Dense>
 #include <complex>
 #include <functional>
+#include <nlohmann/json.hpp>
 #include <nlopt.hpp>
 #include <vector>
 
@@ -37,6 +39,22 @@
 struct RDM1Term {
   int p;
   int q;
+  std::vector<PauliStr> strings;
+  std::vector<qcomp> coeffs;
+};
+
+/**
+ * @struct RDM2Term
+ * @brief Represents a single 2-Particle Reduced Density Matrix term
+ * $a^\dagger_p a^\dagger_q a_r a_s$.
+ *
+ * It contains the mapped Pauli strings and their complex coefficients.
+ */
+struct RDM2Term {
+  int p;
+  int q;
+  int r;
+  int s;
   std::vector<PauliStr> strings;
   std::vector<qcomp> coeffs;
 };
@@ -72,8 +90,8 @@ struct VQEData {
   double *variance_ptr = nullptr; ///< Pointer to store energy variance.
   double *std_ptr = nullptr; ///< Pointer to store energy standard deviation.
 
-  PauliStrSum number_op; ///< Penalty operator for particle number conservation.
-  bool has_number_op =
+  PauliStrSum number_penalty_op; ///< Penalty operator (N - N_target)^2 for particle number conservation.
+  bool has_number_penalty =
       false; ///< Flag indicating if penalty operator is initialized.
 
   std::vector<PauliStr>
@@ -88,6 +106,10 @@ struct VQEData {
       current_1rdm; ///< Latest evaluated 1-RDM expectation values.
 
   // Diffraction data (Eigen)
+  Eigen::VectorXcd rdm1_alpha;   ///< Alpha spin-orbital components
+  Eigen::VectorXcd rdm1_beta;    ///< Beta spin-orbital components
+  Eigen::VectorXcd rdm1_spatial; ///< Total spatial 1-RDM vector
+
   Eigen::MatrixXcd
       integrals; ///< Integral matrix for theoretically computed factors.
   Eigen::VectorXcd exp_factors;  ///< Experimental factors for comparison.
@@ -111,6 +133,8 @@ public:
   //----------------------------------------------------------------------------
   //     CONSTRUCTORS / DESTRUCTORS
   //----------------------------------------------------------------------------
+
+  enum class OptType { NLOPT, SPSA };
 
   /**
    * @brief Constructs a Simulation object.
@@ -176,6 +200,18 @@ public:
    */
   void set_lambda(double lambda);
 
+  /**
+   * @brief Sets the optimizer type to use.
+   * @param type OptType::NLOPT or OptType::SPSA.
+   */
+  void set_optimizer_type(OptType type);
+
+  /**
+   * @brief Sets the SPSA hyperparameters.
+   * @param p SPSAParams struct.
+   */
+  void set_spsa_params(const SPSAParams &p);
+
   //----------------------------------------------------------------------------
   //     STATISTICS & RESULTS
   //----------------------------------------------------------------------------
@@ -199,6 +235,12 @@ public:
    */
   std::vector<double> get_probabilities(const std::vector<double> &params);
 
+  /**
+   * @brief Retrieves the final 1-RDM and 2-RDM evaluated matrices.
+   * @return nlohmann::json JSON object containing 1-RDM and 2-RDM.
+   */
+  nlohmann::json get_rdms() const;
+
 private:
   //----------------------------------------------------------------------------
   //     PRIVATE MEMBERS
@@ -208,11 +250,15 @@ private:
   Ansatz &ansatz;       ///< Quantum circuit ansatz.
   Qureg qubits;         ///< QuEST quantum register.
   nlopt::opt optimizer; ///< Classical optimizer.
+  SPSA_Optimizer spsa_optimizer; ///< SPSA optimizer.
+  OptType opt_type_ = OptType::NLOPT; ///< Current optimizer type.
 
   int n_shots = 0;            ///< configured number of shots.
   double lambda_val = 1.0;    ///< configured diffraction scaling factor.
   double last_variance = 0.0; ///< Last computed variance.
   double last_std = 0.0;      ///< Last computed standard deviation.
+
+  nlohmann::json final_rdms;  ///< Stored final 1-RDM and 2-RDM.
 
   //----------------------------------------------------------------------------
   //     INTERNAL METHODS

@@ -76,7 +76,7 @@ std::string HEA::get_name() const {
  *
  * @return int Number of parameters.
  */
-int HEA::get_num_params() const { return 3 * num_qubits * depth; }
+int HEA::get_num_params() const { return 2 * num_qubits * depth; }
 
 /**
  * @brief Constructs the HEA circuit.
@@ -99,11 +99,10 @@ void HEA::construct_circuit(Qureg qubits, const std::vector<double> &params,
   // 2. Construction
   for (int i = 0; i < depth; ++i) {
     for (int j = 0; j < num_qubits; ++j) {
-      int param_index = 3 * (i * num_qubits + j);
-      // Apply rotations RX, RY, RZ
-      applyRotateX(qubits, j, params[param_index]);
-      applyRotateY(qubits, j, params[param_index + 1]);
-      applyRotateZ(qubits, j, params[param_index + 2]);
+      int param_index = 2 * (i * num_qubits + j);
+      // Apply rotations RY, RZ
+      applyRotateY(qubits, j, params[param_index]);
+      applyRotateZ(qubits, j, params[param_index + 1]);
     }
     // Apply linear CNOT entanglement
     for (int j = 0; j < num_qubits - 1; ++j) {

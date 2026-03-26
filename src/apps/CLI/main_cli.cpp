@@ -111,13 +111,26 @@ int main(int argc, char **argv) {
   std::string opt_ansatz = "HEA";
   int opt_hea_depth = 1;
 
-  app.add_option("--optimizer", opt_optimizer, "NLopt algorithm");
+  app.add_option("--optimizer", opt_optimizer, "NLopt algorithm or SPSA");
   app.add_option("--max-iter", opt_max_iter, "Maximum number of evaluations");
   app.add_option("--tolerance", opt_tolerance, "Relative tolerance");
   app.add_option("--shots", opt_shots,
                  "Number of shots for noise (0 = statevector)");
   app.add_option("--ansatz", opt_ansatz, "Ansatz type (HEA or UCCSD)");
   app.add_option("--hea-depth", opt_hea_depth, "Depth if Ansatz = HEA");
+
+  // SPSA specific options
+  double opt_spsa_a = 0.1;
+  double opt_spsa_c = 0.1;
+  double opt_spsa_A = 10.0;
+  double opt_spsa_alpha = 0.602;
+  double opt_spsa_gamma = 0.101;
+
+  app.add_option("--spsa-a", opt_spsa_a, "SPSA step size numerator a");
+  app.add_option("--spsa-c", opt_spsa_c, "SPSA perturbation numerator c");
+  app.add_option("--spsa-A", opt_spsa_A, "SPSA stability constant A");
+  app.add_option("--spsa-alpha", opt_spsa_alpha, "SPSA step size decay exponent alpha");
+  app.add_option("--spsa-gamma", opt_spsa_gamma, "SPSA perturbation decay exponent gamma");
 
   // Diffraction Data options
   std::string opt_integrals = "";
@@ -231,6 +244,20 @@ int main(int argc, char **argv) {
     // 4. Create Simulation
     nlopt::algorithm algo = get_nlopt_algorithm(opt_optimizer);
     Simulation sim(physics, *ansatz, algo);
+
+    if (opt_optimizer == "SPSA") {
+      sim.set_optimizer_type(Simulation::OptType::SPSA);
+      SPSAParams params;
+      params.a = opt_spsa_a;
+      params.c = opt_spsa_c;
+      params.A = opt_spsa_A;
+      params.alpha = opt_spsa_alpha;
+      params.gamma = opt_spsa_gamma;
+      sim.set_spsa_params(params);
+    } else {
+      sim.set_optimizer_type(Simulation::OptType::NLOPT);
+    }
+
     sim.set_max_evals(opt_max_iter);
     sim.set_tolerance(opt_tolerance);
     sim.set_shots(opt_shots);
@@ -330,6 +357,8 @@ int main(int argc, char **argv) {
          chi_squared_history.empty() ? 0.0 : chi_squared_history.back()},
         {"best_exact_energy", best_energy},
         {"status", status_message}};
+
+    j["rdms"] = sim.get_rdms();
 
     std::vector<nlohmann::json> history_arr;
     for (size_t i = 0; i < iter_history.size(); ++i) {

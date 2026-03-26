@@ -184,6 +184,16 @@ void GUI::DrawConfiguration() {
   ImGui::Text("Optimiseur:");
   ImGui::Combo("##opt", &optimizer_idx, optimizers.data(), optimizers.size());
 
+  if (std::string(optimizers[optimizer_idx]) == "SPSA") {
+    ImGui::SeparatorText("SPSA Hyperparametres");
+    ImGui::InputDouble("Step size (a)", &spsa_a, 0.0, 0.0, "%.3f");
+    ImGui::InputDouble("Perturbation (c)", &spsa_c, 0.0, 0.0, "%.3f");
+    ImGui::InputDouble("Stability (A)", &spsa_A, 0.0, 0.0, "%.3f");
+    ImGui::InputDouble("Decay alpha", &spsa_alpha, 0.0, 0.0, "%.3f");
+    ImGui::InputDouble("Decay gamma", &spsa_gamma, 0.0, 0.0, "%.3f");
+    ImGui::Spacing();
+  }
+
   ImGui::Text("Iterations Optimiseur:");
   ImGui::InputInt("##iter", &max_iter);
 
@@ -314,6 +324,8 @@ void GUI::DrawConfiguration() {
         calculation_thread.join();
 
       nlopt::algorithm selected_algo = optimizer_enums[optimizer_idx];
+      bool is_spsa = (std::string(optimizers[optimizer_idx]) == "SPSA");
+      double s_a = spsa_a, s_c = spsa_c, s_A = spsa_A, s_alpha = spsa_alpha, s_gamma = spsa_gamma;
 
       // Capture necessary values by value for thread safety
       int current_ansatz_idx = ansatz_idx;
@@ -326,7 +338,7 @@ void GUI::DrawConfiguration() {
 
       calculation_thread = std::thread(
           [this, selected_algo, current_ansatz_idx, current_depth, current_map,
-           integrals_path, factors_path, current_lambda]() {
+           integrals_path, factors_path, current_lambda, is_spsa, s_a, s_c, s_A, s_alpha, s_gamma]() {
             try {
               // 1. Load Physics
               Physics physics("hamiltonian.json");
@@ -350,6 +362,18 @@ void GUI::DrawConfiguration() {
 
               // 3. Create Simulation
               Simulation sim(physics, *ansatz, selected_algo);
+              if (is_spsa) {
+                sim.set_optimizer_type(Simulation::OptType::SPSA);
+                SPSAParams params;
+                params.a = s_a;
+                params.c = s_c;
+                params.A = s_A;
+                params.alpha = s_alpha;
+                params.gamma = s_gamma;
+                sim.set_spsa_params(params);
+              } else {
+                sim.set_optimizer_type(Simulation::OptType::NLOPT);
+              }
               sim.set_max_evals(max_iter);
               sim.set_tolerance(tolerance);
               sim.set_shots(shots);
@@ -394,6 +418,9 @@ void GUI::DrawConfiguration() {
 
                 // Get probabilities for final params
                 final_results.sampled_probs = sim.get_probabilities(params);
+                
+                // Get evaluated RDMs
+                final_results.rdms = sim.get_rdms();
               } catch (const std::exception &e) {
                 std::lock_guard<std::mutex> lock(graph_mutex);
                 is_running = false;
@@ -653,6 +680,8 @@ void GUI::SaveRun() {
        chi_squared_history.empty() ? 0.0 : chi_squared_history.back()},
       {"best_exact_energy", best_energy},
       {"status", status_message}};
+
+  j["rdms"] = final_results.rdms;
 
   // History
   std::vector<nlohmann::json> history;

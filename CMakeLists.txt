@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_definitions(QuEST_PRECISION=2) # 2 = Double, 1 = Float
 
-option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" OFF)
+option(BUILD_GUI "Construire l'interface graphique (Laptop Mode)" ON)
 option(USE_MPI   "Activer MPI pour le HPC (Cluster Mode)" OFF)
 option(BUILD_EXAMPLES "Construire les exemples de base" OFF)
 
@@ -142,6 +142,7 @@ add_library(core STATIC
     src/core/simulation.cpp
     src/core/ansatz.cpp
     src/core/physics.cpp
+    src/core/opt.cpp
 )
 
 # On linke les maths et la physique
@@ -210,6 +211,13 @@ if(BUILD_CLI)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/src/scripts/generate_1rdm.py
         $<TARGET_FILE_DIR:quantum_cli>/python/generate_1rdm.py
+    )
+    # Copie le script Python pour la generation d'Hamiltonien
+    add_custom_command(TARGET quantum_cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_cli>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_2rdm.py
+        $<TARGET_FILE_DIR:quantum_cli>/python/generate_2rdm.py
     )
 else()
     message(STATUS "Skipping CLI build (Focus on GUI).")
@@ -333,6 +341,13 @@ if(BUILD_GUI)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/src/scripts/generate_1rdm.py
         $<TARGET_FILE_DIR:quantum_gui>/python/generate_1rdm.py
+    )
+    # Copie le script Python pour la generation d'Hamiltonien
+    add_custom_command(TARGET quantum_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:quantum_gui>/python
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/scripts/generate_2rdm.py
+        $<TARGET_FILE_DIR:quantum_gui>/python/generate_2rdm.py
     )
 
 else()

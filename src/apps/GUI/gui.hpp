@@ -138,19 +138,26 @@ private:
       "LN_COBYLA",   "LN_BOBYQA",     "LN_NEWUOA", "LN_NEWUOA_BOUND",
       "LN_PRAXIS",   "LN_NELDERMEAD", "LN_SBPLX",  "GN_DIRECT",
       "GN_DIRECT_L", "GN_CRS2_LM",    "GN_ISRES",  "GN_ESCH",
-      "LD_LBFGS",    "LD_SLSQP"};
+      "LD_LBFGS",    "LD_SLSQP",      "SPSA"};
 
   std::vector<nlopt::algorithm> optimizer_enums = {
       nlopt::LN_COBYLA,       nlopt::LN_BOBYQA, nlopt::LN_NEWUOA,
       nlopt::LN_NEWUOA_BOUND, nlopt::LN_PRAXIS, nlopt::LN_NELDERMEAD,
       nlopt::LN_SBPLX,        nlopt::GN_DIRECT, nlopt::GN_DIRECT_L,
       nlopt::GN_CRS2_LM,      nlopt::GN_ISRES,  nlopt::GN_ESCH,
-      nlopt::LD_LBFGS,        nlopt::LD_SLSQP};
+      nlopt::LD_LBFGS,        nlopt::LD_SLSQP,  nlopt::LN_NELDERMEAD};
 
   int optimizer_idx = 5;   ///< Default optimizer index (Nelder-Mead).
   int max_iter = 100;      ///< Maximum number of iterations for the optimizer.
   int shots = 1024;        ///< Number of shots for quantum measurement.
   double tolerance = 1e-8; ///< Tolerance for convergence.
+  
+  // SPSA Hyperparameters
+  double spsa_a = 0.1;
+  double spsa_c = 0.1;
+  double spsa_A = 10.0;
+  double spsa_alpha = 0.602;
+  double spsa_gamma = 0.101;
 
   //----------------------------------------------------------------------------
   //     DATA MEMBERS - INFO
@@ -230,6 +237,7 @@ private:
     double noisy_energy = 0; ///< Energy calculated with noise.
     std::vector<double>
         sampled_probs; ///< Probabilities sampled from the final state.
+    nlohmann::json rdms; ///< Final 1-RDM and 2-RDM evaluated matrices.
   } final_results;
 
   bool hamiltonian_exists =
