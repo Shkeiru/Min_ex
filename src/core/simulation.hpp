@@ -94,6 +94,10 @@ struct VQEData {
   bool has_number_penalty =
       false; ///< Flag indicating if penalty operator is initialized.
 
+  PauliStrSum spin_penalty_op; ///< Penalty operator (S_z - target_S_z)^2 for spin projection conservation.
+  bool has_spin_penalty =
+      false; ///< Flag indicating if spin penalty operator is initialized.
+
   std::vector<PauliStr>
       parsed_paulis; ///< Pre-parsed QuEST Pauli strings for noisy sim.
   std::vector<PauliStrSum>
@@ -114,6 +118,10 @@ struct VQEData {
       integrals; ///< Integral matrix for theoretically computed factors.
   Eigen::VectorXcd exp_factors;  ///< Experimental factors for comparison.
   Eigen::VectorXd uncertainties; ///< Experimental uncertainties.
+
+  // Debug: last computed eta and structure factors
+  double last_eta = 0.0;                    ///< Last computed scale factor η.
+  Eigen::VectorXd last_calc_factors_abs;    ///< Last computed |F_calc| array.
 };
 
 //------------------------------------------------------------------------------

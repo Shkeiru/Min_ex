@@ -190,7 +190,19 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
   // Apply variance penalty for deviations from expected electron number
   if (!data->ansatz.preserves_particle_number() && data->has_number_penalty) {
     qreal penalty_val = calcExpecPauliStrSum(local_qubits, data->number_penalty_op);
-    energy += 300.0 * penalty_val;
+    energy += 3.0 * penalty_val;
+  }
+
+  if (!data->ansatz.preserves_spin() && data->has_spin_penalty) {
+    // 1. Calcul de <S^2>
+    qreal s2_val = calcExpecPauliStrSum(local_qubits, data->spin_penalty_op);
+    
+    // 2. Détermination de la cible S(S+1)
+    double target_s = data->physics.get_target_spin() / 2.0; 
+    double target_s2 = target_s * (target_s + 1.0);
+    
+    // 3. Pénalité quadratique (mean-field penalty)
+    energy += 3.0 * std::pow(s2_val - target_s2, 2);
   }
 
   //--------------------------------------------------------------------------
@@ -229,8 +241,11 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
   if (out_chi_squared)
     *out_chi_squared = 0.0;
 
-  if (!data->current_1rdm.empty() && data->integrals.size() > 0) {
+  if (!data->current_1rdm.empty()) {
     int n_orbs = data->num_qubits / 2;
+    data->rdm1_alpha.resize(n_orbs * n_orbs);
+    data->rdm1_beta.resize(n_orbs * n_orbs);
+    data->rdm1_spatial.resize(n_orbs * n_orbs);
     data->rdm1_alpha.setZero();
     data->rdm1_beta.setZero();
 
@@ -238,8 +253,8 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
     for (size_t idx = 0; idx < data->rdm1_operators.size(); ++idx) {
       int p = data->rdm1_operators[idx].p;
       int q = data->rdm1_operators[idx].q;
-      int p_spatial = p / 2;
-      int q_spatial = q / 2;
+      int p_spatial = (n_orbs-1) - p / 2;
+      int q_spatial = (n_orbs-1) - q / 2;
       int spatial_idx = p_spatial * n_orbs + q_spatial;
 
       if (p % 2 == 0 && q % 2 == 0) {
@@ -251,27 +266,29 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
 
     data->rdm1_spatial = data->rdm1_alpha + data->rdm1_beta;
 
-    // Perform the matrix-vector multiplication to get the theoretical factors
-    Eigen::VectorXcd calc_factors = data->integrals * data->rdm1_spatial;
+    if (data->integrals.size() > 0) {
+      // Perform the matrix-vector multiplication to get the theoretical factors
+      Eigen::VectorXcd calc_factors = data->integrals * data->rdm1_spatial;
 
-    // Computation of eta
-    double eta = ((calc_factors.cwiseAbs() * data->exp_factors.cwiseAbs())
-                      .cwiseQuotient(data->uncertainties.cwiseAbs2())
-                      .sum()) /
-                 (calc_factors.cwiseAbs2()
-                      .cwiseQuotient(data->uncertainties.cwiseAbs2())
-                      .sum());
+      // Computation of eta
+      double eta = (calc_factors.array().abs() * data->exp_factors.array().abs() / data->uncertainties.array().abs2()).sum() /
+             (calc_factors.array().abs2() / data->uncertainties.array().abs2()).sum();
 
-    double chi_squared =
-        (1.0 / data->exp_factors.size()) *
-        (eta * calc_factors.cwiseAbs() - data->exp_factors.cwiseAbs())
-            .cwiseAbs2()
-            .cwiseQuotient(data->uncertainties.cwiseAbs2())
-            .sum();
+      // Store for debug output
+      data->last_eta = eta;
+      data->last_calc_factors_abs = calc_factors.cwiseAbs().cast<double>();
 
-    if (out_chi_squared)
-      *out_chi_squared = chi_squared;
-    energy += data->lambda * chi_squared;
+      double chi_squared =
+          (1.0 / data->exp_factors.size()) *
+          (eta * calc_factors.cwiseAbs() - data->exp_factors.cwiseAbs())
+              .cwiseAbs2()
+              .cwiseQuotient(data->uncertainties.cwiseAbs2())
+              .sum();
+
+      if (out_chi_squared)
+        *out_chi_squared = chi_squared;
+      energy += data->lambda * chi_squared;
+    }
   }
 
   return energy;
@@ -286,9 +303,7 @@ double Simulation::cost_function(const std::vector<double> &params,
   double current_chi_squared = 0.0;
 
   // 1. Calculate the energy of the current point on the main register
-  double base_energy =
-      evaluate_functional(params, data, data->qubits, data->current_1rdm,
-                          &current_quantum_energy, &current_chi_squared);
+  double base_energy = evaluate_functional(params, data, data->qubits, data->current_1rdm, &current_quantum_energy, &current_chi_squared);
 
   // 2. Calculate the local gradients using Parameter Shift Rule (PSR)
   // ONLY if requested by the optimizer
@@ -589,6 +604,61 @@ double Simulation::run(
     data.has_number_penalty = true;
   }
 
+  if (!ansatz.preserves_spin()) {
+    int N_q = physics.get_num_qubits();
+    int n_orbs = N_q / 2;
+    std::string identity = std::string(N_q, 'I');
+    std::map<std::string, double> s2_map;
+
+    // 1. Termes diagonaux (k = l)
+    for (int k = 0; k < n_orbs; ++k) {
+        s2_map[identity] += 3.0 / 8.0;
+        
+        std::string term = identity;
+        term[2*k] = 'Z'; 
+        term[2*k+1] = 'Z';
+        s2_map[term] -= 3.0 / 8.0;
+    }
+
+    // 2. Termes croisés (k < l)
+    for (int k = 0; k < n_orbs; ++k) {
+        for (int l = k + 1; l < n_orbs; ++l) {
+            std::string t;
+            
+            // Composantes Sz * Sz
+            t = identity; t[2*k+1] = 'Z'; t[2*l+1] = 'Z'; s2_map[t] += 1.0/8.0;
+            t = identity; t[2*k+1] = 'Z'; t[2*l] = 'Z';   s2_map[t] -= 1.0/8.0;
+            t = identity; t[2*k] = 'Z';   t[2*l+1] = 'Z'; s2_map[t] -= 1.0/8.0;
+            t = identity; t[2*k] = 'Z';   t[2*l] = 'Z';   s2_map[t] += 1.0/8.0;
+
+            // Composantes Sx * Sx
+            t = identity; t[2*k]='X'; t[2*k+1]='X'; t[2*l]='X'; t[2*l+1]='X'; s2_map[t] += 1.0/8.0;
+            t = identity; t[2*k]='X'; t[2*k+1]='X'; t[2*l]='Y'; t[2*l+1]='Y'; s2_map[t] += 1.0/8.0;
+            t = identity; t[2*k]='Y'; t[2*k+1]='Y'; t[2*l]='X'; t[2*l+1]='X'; s2_map[t] += 1.0/8.0;
+            t = identity; t[2*k]='Y'; t[2*k+1]='Y'; t[2*l]='Y'; t[2*l+1]='Y'; s2_map[t] += 1.0/8.0;
+
+            // Composantes Sy * Sy
+            t = identity; t[2*k]='X'; t[2*k+1]='Y'; t[2*l]='X'; t[2*l+1]='Y'; s2_map[t] += 1.0/8.0;
+            t = identity; t[2*k]='X'; t[2*k+1]='Y'; t[2*l]='Y'; t[2*l+1]='X'; s2_map[t] -= 1.0/8.0;
+            t = identity; t[2*k]='Y'; t[2*k+1]='X'; t[2*l]='X'; t[2*l+1]='Y'; s2_map[t] -= 1.0/8.0;
+            t = identity; t[2*k]='Y'; t[2*k+1]='X'; t[2*l]='Y'; t[2*l+1]='X'; s2_map[t] += 1.0/8.0;
+        }
+    }
+
+    // 3. Conversion propre en QuEST PauliStrSum
+    std::vector<PauliStr> s2_terms_vec;
+    std::vector<qcomp> s2_coeffs_vec;
+    for (const auto& kv : s2_map) {
+        if (std::abs(kv.second) > 1e-9) {
+            s2_terms_vec.push_back(getPauliStr(kv.first));
+            s2_coeffs_vec.push_back(kv.second); // Real coefficients
+        }
+    }
+    
+    data.spin_penalty_op = createPauliStrSum(s2_terms_vec.data(), s2_coeffs_vec.data(), s2_terms_vec.size());
+    data.has_spin_penalty = true;
+  }
+
   optimizer.set_min_objective(cost_function, &data);
   spsa_optimizer.set_min_objective(cost_function, &data);
 
@@ -796,12 +866,58 @@ double Simulation::run(
     rdm2_json.push_back(term_json);
   }
   rdm_output["2-RDM"] = rdm2_json;
+  // 1-RDM Spatiale
+  nlohmann::json rdm1_spat_json = nlohmann::json::array();
+  int spat_n_orbs = data.num_qubits / 2;
+  for (int p = 0; p < spat_n_orbs; ++p) {
+    for (int q = 0; q < spat_n_orbs; ++q) {
+      int spatial_idx = p * spat_n_orbs + q;
+      nlohmann::json trm;
+      trm["p"] = p;
+      trm["q"] = q;
+      if (data.rdm1_spatial.size() > spatial_idx) {
+        trm["val_real"] = data.rdm1_spatial(spatial_idx).real();
+        trm["val_imag"] = data.rdm1_spatial(spatial_idx).imag();
+      } else {
+        trm["val_real"] = 0.0;
+        trm["val_imag"] = 0.0;
+      }
+      rdm1_spat_json.push_back(trm);
+    }
+  }
+  rdm_output["1-RDM_spatial"] = rdm1_spat_json;
+
+  // Vector State direct from the QuEST simulation
+  long long dim = 1LL << data.num_qubits;
+  nlohmann::json state_json = nlohmann::json::array();
+  for (long long k = 0; k < dim; ++k) {
+    qcomp amp = getQuregAmp(qubits, k);
+    nlohmann::json amp_j;
+    amp_j["real"] = amp.real();
+    amp_j["imag"] = amp.imag();
+    state_json.push_back(amp_j);
+  }
+  rdm_output["state_vector"] = state_json;
+
+  // Debug: final eta and structure factors
+  rdm_output["final_eta"] = data.last_eta;
+  {
+    nlohmann::json cf_json = nlohmann::json::array();
+    for (int i = 0; i < data.last_calc_factors_abs.size(); ++i) {
+      cf_json.push_back(data.last_calc_factors_abs(i));
+    }
+    rdm_output["final_calc_factors"] = cf_json;
+  }
 
   final_rdms = rdm_output;
 
 
   if (data.has_number_penalty) {
     destroyPauliStrSum(data.number_penalty_op);
+  }
+
+  if (data.has_spin_penalty) {
+    destroyPauliStrSum(data.spin_penalty_op);
   }
 
   // Properly destruct pre-allocated single-term Pauli sums to prevent memory

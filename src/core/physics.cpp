@@ -37,6 +37,8 @@ int Physics::get_num_terms() const { return (int)pauli_strings.size(); }
 
 int Physics::get_n_electrons() const { return n_electrons; }
 
+int Physics::get_target_spin() const { return target_spin; }
+
 PauliStrSum Physics::get_quest_hamiltonian() const { return quest_hamiltonian; }
 
 const std::vector<std::string> &Physics::get_pauli_strings() const {
@@ -100,6 +102,15 @@ void Physics::load_hamiltonian() {
     // 0
     spdlog::warn("n_electrons not found in JSON, defaulting to 0");
     n_electrons = 0;
+  }
+
+  if (j.contains("spin")) {
+    target_spin = j["spin"].get<int>();
+  } else if (j.contains("multiplicity")) {
+    target_spin = j["multiplicity"].get<int>() - 1;
+  } else {
+    spdlog::warn("Spin/multiplicity not found in JSON, defaulting to singlet (0)");
+    target_spin = 0;
   }
 
   pauli_strings.clear();

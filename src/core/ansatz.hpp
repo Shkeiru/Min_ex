@@ -71,6 +71,12 @@ public:
    * @return bool True if particle number is preserved, false otherwise.
    */
   virtual bool preserves_particle_number() const = 0;
+
+  /**
+   * @brief Indicates if the ansatz mathematically preserves the spin projection (S_z).
+   * @return bool True if spin projection is preserved, false otherwise.
+   */
+  virtual bool preserves_spin() const = 0;
 };
 
 //------------------------------------------------------------------------------
@@ -112,6 +118,8 @@ public:
   std::string get_name() const override;
 
   bool preserves_particle_number() const override;
+
+  bool preserves_spin() const override;
 };
 
 //------------------------------------------------------------------------------
@@ -177,4 +185,5 @@ public:
   int get_num_params() const override;
   std::string get_name() const override;
   bool preserves_particle_number() const override;
+  bool preserves_spin() const override;
 };

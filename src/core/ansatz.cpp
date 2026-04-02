@@ -117,6 +117,8 @@ int HEA::get_depth() const { return depth; }
 
 bool HEA::preserves_particle_number() const { return false; }
 
+bool HEA::preserves_spin() const { return false; }
+
 //------------------------------------------------------------------------------
 //     UCCSD IMPLEMENTATION
 //------------------------------------------------------------------------------
@@ -312,6 +314,8 @@ int UCCSD::get_num_params() const { return excitations.size(); }
 int UCCSD::get_num_qubits() const { return num_qubits; }
 
 bool UCCSD::preserves_particle_number() const { return true; }
+
+bool UCCSD::preserves_spin() const { return true; }
 
 /**
  * @brief Constructs the UCCSD circuit.

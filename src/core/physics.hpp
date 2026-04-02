@@ -109,6 +109,12 @@ public:
          */
         int get_n_electrons() const;
 
+        /**
+         * @brief Gets the target spin (N_alpha - N_beta) from PySCF.
+         * @return int Spin target value.
+         */
+        int get_target_spin() const;
+
 private:
         //----------------------------------------------------------------------------
         //     PRIVATE MEMBERS
@@ -117,6 +123,7 @@ private:
         std::string filename;                   ///< Path to the Hamiltonian file.
         int num_qubits = 0;                     ///< Number of qubits.
         int n_electrons = 0;                    ///< Number of electrons.
+        int target_spin = 0;                    ///< PySCF spin (N_alpha - N_beta).
         std::vector<std::string> pauli_strings; ///< Stored Pauli strings.
         std::vector<qcomp> coefficients;        ///< Stored coefficients.
         PauliStrSum quest_hamiltonian;          ///< QuEST object.
