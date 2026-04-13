@@ -42,7 +42,7 @@ if(CMAKE_CUDA_COMPILER)
     
     # Récupération automatique de la target architecture (ex: sm_80)
     # CMake >= 3.18
-    set(CMAKE_CUDA_ARCHITECTURES "native")
+    set(CMAKE_CUDA_ARCHITECTURES "native" CACHE)
     
     # Les variables de QuEST (selon version)
     set(COMPILER "nvcc" CACHE STRING "" FORCE)
