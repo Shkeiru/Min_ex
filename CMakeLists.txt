@@ -46,7 +46,7 @@ if(CMAKE_CUDA_COMPILER)
     
     # Les variables de QuEST (selon version)
     set(COMPILER "nvcc" CACHE STRING "" FORCE)
-    set(GPU_COMPUTE_CAPABILITY "native" CACHE STRING "" FORCE)
+    set(GPU_COMPUTE_CAPABILITY "native" CACHE STRING "Cible CUDA par défaut")
 else()
     # 2. Tentative AMD (ROCm / HIP)
     check_language(HIP)
