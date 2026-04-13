@@ -131,22 +131,22 @@ public:
  * @brief Represents a single UCCSD excitation term.
  */
 struct UCCSDExcitation {
-
   struct Term {
     std::string pauli;          ///< Pauli string (e.g., "X0 Y1").
     std::complex<double> coeff; ///< Complex coefficient.
   };
   std::vector<Term> terms;
 };
-enum class GateType { Hadamard, RX_PI_2, RX_MINUS_PI_2, CNOT, RZ_PARAM };
 
-struct Instruction {
-  GateType type;
-  int target;
-  int control; // Only for CNOT
+// --- FINI L'USINE A GAZ DE GATE TYPE ---
+// Voici la nouvelle structure pour tes gadgets, propre et digne d'un pro.
+struct GadgetInst {
+  std::string pauli_chars;    // Ex: "XYZ"
+  std::vector<int> targets;   // Ex: {0, 1, 5}
   int param_idx;
-  double angle_multiplier;
+  double multiplier;
 };
+
 /**
  * @class UCCSD
  * @brief Unitary Coupled Cluster Singles and Doubles Ansatz.
@@ -161,7 +161,7 @@ private:
   int num_qubits;
   int num_electrons;
   std::vector<UCCSDExcitation> excitations;
-  std::vector<Instruction> compiled_tape;
+  std::vector<GadgetInst> optimized_tape; // Adieu 'compiled_tape' !
 
 public:
   ~UCCSD() override;

@@ -380,7 +380,7 @@ void GUI::DrawConfiguration() {
               sim.set_lambda(current_lambda);
 
               // 4. Run Optimization
-              std::vector<double> params(ansatz->get_num_params(), 0.1);
+              std::vector<double> params(ansatz->get_num_params(), 0);
 
               double min_energy = sim.run(
                   params,

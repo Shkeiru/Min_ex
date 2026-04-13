@@ -190,7 +190,7 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
   // Apply variance penalty for deviations from expected electron number
   if (!data->ansatz.preserves_particle_number() && data->has_number_penalty) {
     qreal penalty_val = calcExpecPauliStrSum(local_qubits, data->number_penalty_op);
-    energy += 3.0 * penalty_val;
+    energy += 10.0 * penalty_val;
   }
 
   if (!data->ansatz.preserves_spin() && data->has_spin_penalty) {
@@ -202,7 +202,7 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
     double target_s2 = target_s * (target_s + 1.0);
     
     // 3. Pénalité quadratique (mean-field penalty)
-    energy += 3.0 * std::pow(s2_val - target_s2, 2);
+    energy += 10.0 * std::pow(s2_val - target_s2, 2);
   }
 
   //--------------------------------------------------------------------------

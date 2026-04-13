@@ -307,7 +307,7 @@ int main(int argc, char **argv) {
     };
 
     spdlog::info(">>> Starting XRW-VQE... (Simulation)");
-    std::vector<double> params(ansatz->get_num_params(), 0.1);
+    std::vector<double> params(ansatz->get_num_params(), 0);
 
     double noisy_energy = 0.0;
     std::string status_message = "XRW-VQE terminated.";
