@@ -190,7 +190,7 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
   // Apply variance penalty for deviations from expected electron number
   if (!data->ansatz.preserves_particle_number() && data->has_number_penalty) {
     qreal penalty_val = calcExpecPauliStrSum(local_qubits, data->number_penalty_op);
-    energy += 10.0 * penalty_val;
+    energy += 14 * penalty_val;
   }
 
   if (!data->ansatz.preserves_spin() && data->has_spin_penalty) {
@@ -202,7 +202,7 @@ double Simulation::evaluate_functional(const std::vector<double> &params,
     double target_s2 = target_s * (target_s + 1.0);
     
     // 3. Pénalité quadratique (mean-field penalty)
-    energy += 10.0 * std::pow(s2_val - target_s2, 2);
+    energy += 14 * std::pow(s2_val - target_s2, 2);
   }
 
   //--------------------------------------------------------------------------
@@ -311,7 +311,7 @@ double Simulation::cost_function(const std::vector<double> &params,
     int num_params = params.size();
 
     // Initialize Qureg
-    Qureg local_qubits(num_params);
+    Qureg local_qubits = createQureg(data->num_qubits);
 
     // Evaluate parameter shifts sequentially to allow QuEST/Eigen to fully
     // utilize threads

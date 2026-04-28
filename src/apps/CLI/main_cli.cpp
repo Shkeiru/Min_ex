@@ -358,7 +358,7 @@ int main(int argc, char **argv) {
         {"best_exact_energy", best_energy},
         {"status", status_message}};
 
-    j["rdms"] = sim.get_rdms();
+    // j["rdms"] = sim.get_rdms();
 
     std::vector<nlohmann::json> history_arr;
     for (size_t i = 0; i < iter_history.size(); ++i) {
@@ -369,15 +369,21 @@ int main(int argc, char **argv) {
         entry["base_energy"] = base_energy_history[i];
       if (i < chi_squared_history.size())
         entry["chi_squared"] = chi_squared_history[i];
-      if (i < probs_history.size())
-        entry["probabilities"] = probs_history[i];
-      if (i < params_history.size())
-        entry["parameters"] = params_history[i];
+      
+      // On ne garde pas les probabilites par iteration pour ne pas surcharger le log
+      // if (i < probs_history.size())
+      //   entry["probabilities"] = probs_history[i];
+
+      // On garde les parametres uniquement pour l'iteration finale
+      if (i == iter_history.size() - 1) {
+        if (i < params_history.size())
+          entry["parameters"] = params_history[i];
+      }
       history_arr.push_back(entry);
     }
     j["history"] = history_arr;
 
-    j["state"]["probabilities"] = counts_values;
+    // j["state"]["probabilities"] = counts_values;
 
     std::vector<std::string> labels;
     int n_q = 0;
@@ -408,6 +414,17 @@ int main(int argc, char **argv) {
     o << std::setw(4) << j << std::endl;
 
     spdlog::info("Run saved to: {}", filename);
+
+    // Save RDMs to a separate file to keep the main log clean
+    std::string rdm_filename = filename;
+    if (rdm_filename.find("run_") == 0) {
+      rdm_filename.replace(0, 4, "rdms_");
+    } else {
+      rdm_filename = "rdms_" + filename;
+    }
+    std::ofstream rdm_out(rdm_filename);
+    rdm_out << std::setw(4) << sim.get_rdms() << std::endl;
+    spdlog::info("RDMs saved to: {}", rdm_filename);
 
     finalizeQuESTEnv();
 

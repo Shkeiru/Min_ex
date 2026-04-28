@@ -101,12 +101,12 @@ void HEA::construct_circuit(Qureg qubits, const std::vector<double> &params,
     for (int j = 0; j < num_qubits; ++j) {
       int param_index = 2 * (i * num_qubits + j);
       // Apply rotations RY, RZ
-      applyRotateY(qubits, j, params[param_index]);
-      applyRotateZ(qubits, j, params[param_index + 1]);
+      applyRotateX(qubits, j, params[param_index]);
+      applyRotateY(qubits, j, params[param_index + 1]);
     }
     // Apply linear CNOT entanglement
     for (int j = 0; j < num_qubits - 1; ++j) {
-      applyControlledPauliX(qubits, j, j + 1);
+      applyControlledPauliZ(qubits, j, j + 1);
     }
   }
 }
